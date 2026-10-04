@@ -34,8 +34,28 @@ const wide = matchMedia('(min-width: 980px)');
 const roomy = () => wide.matches && !coarse.matches;
 const pct1 = n => (n || 0).toLocaleString('pt-BR', { minimumFractionDigits: 1, maximumFractionDigits: 1 }) + '%';
 const fold = s => String(s || '').normalize('NFD').replace(/\p{Diacritic}/gu, '').toLowerCase();
-// Agremiação colour: a list that includes PT or PL takes that colour, anything else is "outros".
-const coalCls = name => { const t = String(name || '').toUpperCase().split('/').map(x => x.trim()); return t.includes('PT') ? 'pt' : t.includes('PL') ? 'pl' : 'other'; };
+// Party colours for badges and seat bars (approximate traditional colours). PT/PL keep the dashboard red/green,
+// and any list that includes them takes that colour. The map itself stays PT/PL/Outros by design.
+const PARTY_COLORS = {
+  MDB: '#facc15', NOVO: '#fb923c', PSD: '#818cf8', PP: '#38bdf8', 'UNIÃO': '#38bdf8', REPUBLICANOS: '#2dd4bf',
+  PODE: '#f472b6', PSOL: '#c084fc', REDE: '#c084fc', PSDB: '#3b82f6', CIDADANIA: '#3b82f6', PSB: '#fbbf24',
+  PDT: '#fda4af', AVANTE: '#67e8f9', SOLIDARIEDADE: '#fdba74', PRD: '#a8a29e', 'MISSÃO': '#e879f9', DC: '#d6d3d1',
+  PCDOB: '#fca5a5', PV: '#86efac', AGIR: '#fcd34d', MOBILIZA: '#a5b4fc', PMB: '#f9a8d4', UP: '#fda4af', PCB: '#fca5a5',
+  PSTU: '#fca5a5', PCO: '#fca5a5', DEMOCRATA: '#93c5fd', PRTB: '#bef264',
+};
+const FALLBACK_HUES = [30, 45, 190, 210, 230, 260, 280, 300, 320]; // stable hue for unknown parties, never PT red / PL green
+function partyColor(name) {
+  const t = String(name || '').toUpperCase().split('/').map(x => x.trim());
+  if (t.includes('PT')) return 'var(--pt)';
+  if (t.includes('PL')) return 'var(--pl)';
+  const known = t.map(x => PARTY_COLORS[x]).find(Boolean);
+  if (known) return known;
+  let h = 0;
+  for (const ch of t.join('')) h = (h * 31 + ch.charCodeAt(0)) >>> 0;
+  return `hsl(${FALLBACK_HUES[h % FALLBACK_HUES.length]} 75% 70%)`;
+}
+const pstyle = name => { const c = partyColor(name); return `style="background:${c};color:${c.startsWith('var') ? '#fff' : '#0d1424'}"`; };
+const partyBadge = (label, colourBy = label) => `<span class="party" ${pstyle(colourBy)}>${esc(label)}</span>`;
 
 const RACES = {
   governador: { title: 'GOVERNADOR — SANTA CATARINA', lead: 'Liderando', note: 'O destaque indica apenas quem lidera neste momento. A situação oficial (eleito ou 2º turno) só aparece quando definida pelo TSE.' },
@@ -179,7 +199,7 @@ function candRow(c, i, small) {
   const cls = partyCls(c.party);
   return `<div class="cand${small ? ' sm' : ''}">
     <span class="pos">${i + 1}º</span>
-    <span class="nm">${esc(nice(c.name))}<span class="party bg-${cls} ${cls}">${esc(c.party)}</span></span>
+    <span class="nm">${esc(nice(c.name))}${partyBadge(c.party)}</span>
     <span class="pc">${pct(c.pct)}</span>
     <span class="vt"><b>${int(c.votes)}</b> votos</span>
     <span class="meter"><i class="bg-${cls}" style="width:${Math.min(100, c.pct || 0)}%"></i></span>
@@ -208,7 +228,7 @@ function renderNational() {
   $('nat-margin').innerHTML = n.status === 'waiting' ? 'Aguardando primeira totalização'
     : n.status === 'tie' ? '<b>Empate momentâneo</b> entre 1º e 2º'
     : `Diferença entre 1º e 2º: <b>${int(n.margin)}</b> votos`;
-  $('nat-rest').innerHTML = c.slice(2).map((x, i) => `<li><span>${i + 3}º ${esc(nice(x.name))}<span class="party bg-${partyCls(x.party)} ${partyCls(x.party)}">${esc(x.party)}</span><br><span class="v">${int(x.votes)} votos</span></span><span class="p">${pct(x.pct)}</span></li>`).join('');
+  $('nat-rest').innerHTML = c.slice(2).map((x, i) => `<li><span>${i + 3}º ${esc(nice(x.name))}${partyBadge(x.party)}<br><span class="v">${int(x.votes)} votos</span></span><span class="p">${pct(x.pct)}</span></li>`).join('');
   $('nat-rest-wrap').hidden = c.length <= 2;
 }
 
@@ -273,7 +293,7 @@ function renderState() {
   const c = a.candidates || [];
   card.innerHTML = head
     + `<div class="list">${c.slice(0, 3).map((x, i) => candRow(x, i, true)).join('')}</div>`
-    + (c.length > 3 ? `<details class="others"><summary>Todos os candidatos (${c.length})</summary><ol class="rest">${c.slice(3).map((x, i) => `<li><span>${i + 4}º ${esc(nice(x.name))}<span class="party bg-${partyCls(x.party)} ${partyCls(x.party)}">${esc(x.party)}</span><br><span class="v">${int(x.votes)} votos</span></span><span class="p">${pct(x.pct)}</span></li>`).join('')}</ol></details>` : '')
+    + (c.length > 3 ? `<details class="others"><summary>Todos os candidatos (${c.length})</summary><ol class="rest">${c.slice(3).map((x, i) => `<li><span>${i + 4}º ${esc(nice(x.name))}${partyBadge(x.party)}<br><span class="v">${int(x.votes)} votos</span></span><span class="p">${pct(x.pct)}</span></li>`).join('')}</ol></details>` : '')
     + facts(a);
 }
 
@@ -344,8 +364,8 @@ function renderRaceHead(r, meta) {
     const total = (r.parties || []).reduce((n, p) => n + p.seats, 0);
     $('race-parties').innerHTML = total
       ? `<h3>Vagas por agremiação <span>(distribuição parcial do TSE · ${total}/${r.seats})</span></h3>
-         <div class="seatbar">${r.parties.map(p => `<i class="bg-${coalCls(p.name)}" style="flex-grow:${p.seats}" title="${esc(p.name)}: ${p.seats}"></i>`).join('')}</div>
-         <div class="seats">${r.parties.map(p => `<span class="seat"><i class="sw ${coalCls(p.name)}"></i>${esc(p.name)}<b>${p.seats}</b></span>`).join('')}</div>`
+         <div class="seatbar">${r.parties.map(p => `<i style="flex-grow:${p.seats};background:${partyColor(p.name)}" title="${esc(p.name)}: ${p.seats}"></i>`).join('')}</div>
+         <div class="seats">${r.parties.map(p => `<span class="seat"><i class="sw" style="background:${partyColor(p.name)}"></i>${esc(p.name)}<b>${p.seats}</b></span>`).join('')}</div>`
       : '<h3>Vagas por agremiação</h3><p class="race-note">Nenhuma vaga distribuída ainda.</p>';
     const n = c.filter(x => x.elected || x.entering).length;
     const [fin, ftop, fall] = $('race-filters').querySelectorAll('span');
@@ -367,10 +387,10 @@ function renderRaceList(r) {
     note.textContent = '';
     list.innerHTML = c.map(x => `<li class="cand rc${x.inSeats && x.valid ? ' in' : ''}${x.elected ? ' el' : ''}">
       <span class="pos">${x.rank}º</span>
-      <span class="nm">${esc(nice(x.name))}<span class="party bg-${partyCls(x.party)} ${partyCls(x.party)}">${esc(x.party)}</span></span>
+      <span class="nm">${esc(nice(x.name))}${partyBadge(x.party)}</span>
       <span class="pc">${pct(x.pct)}</span>
       <span class="vt"><b>${int(x.votes)}</b> votos ${badges(x, r)}</span>
-      <span class="meter"><i class="bg-${partyCls(x.party)}" style="width:${Math.min(100, x.pct || 0)}%"></i></span>
+      <span class="meter"><i style="width:${Math.min(100, x.pct || 0)}%;background:${partyColor(x.party)}"></i></span>
     </li>`).join('');
     return;
   }
@@ -386,7 +406,7 @@ function renderRaceList(r) {
   list.className = 'race-list prop';
   list.innerHTML = c.length ? c.map(x => `<li class="row${x.elected ? ' el' : x.entering ? ' in' : ''}">
       <span class="rk">${x.rank}º</span>
-      <span class="who"><b>${esc(nice(x.name))}</b> <span class="num">${esc(x.number)}</span><br><span class="party bg-${partyCls(x.party)} ${partyCls(x.party)}">${esc(x.party)}</span>${x.coalition && x.coalition !== x.party ? `<span class="co">${esc(x.coalition)}</span>` : ''}${badges(x, r, view)}</span>
+      <span class="who"><b>${esc(nice(x.name))}</b> <span class="num">${esc(x.number)}</span><br>${partyBadge(x.party, x.coalition)}${x.coalition && x.coalition !== x.party ? `<span class="co">${esc(x.coalition)}</span>` : ''}${badges(x, r, view)}</span>
       <span class="nums"><b>${int(x.votes)}</b><span>${pct(x.pct)}</span></span>
     </li>`).join('') : `<li class="none">${q ? 'Nenhum candidato encontrado.' : r.status === 'waiting' ? 'Aguardando primeira totalização.' : 'Nenhuma vaga distribuída ainda.'}</li>`;
 }
