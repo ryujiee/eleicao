@@ -1,0 +1,59 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Eleições 2026 — Apuração para Presidente ao vivo</title>
+<meta name="description" content="Apuração em tempo real da eleição presidencial de 2026, com dados oficiais do TSE e mapa interativo de quem lidera em cada estado.">
+<meta name="theme-color" content="#0a0f1c">
+<link rel="stylesheet" href="style.css">
+<link rel="preload" href="brasil.svg" as="fetch" crossorigin>
+<script type="module" src="app.js"></script>
+</head>
+<body>
+<header class="top">
+  <div class="brand">
+    <h1>ELEIÇÕES 2026</h1>
+    <span id="live" class="live off" role="status">● CONECTANDO</span>
+  </div>
+  <div class="apurado"><strong id="nat-pct">–</strong> <span>apurado</span></div>
+  <div class="bar" aria-hidden="true"><i id="nat-bar"></i></div>
+  <p class="meta" id="meta">Aguardando dados do TSE…</p>
+</header>
+
+<main class="grid">
+  <section class="card nat" aria-labelledby="nat-title">
+    <h2 id="nat-title">PRESIDENTE — BRASIL</h2>
+    <div id="nat-top" class="top2"></div>
+    <p id="nat-margin" class="margin"></p>
+    <details class="others" id="nat-rest-wrap">
+      <summary>Demais candidatos</summary>
+      <ol id="nat-rest" class="rest"></ol>
+    </details>
+  </section>
+
+  <section class="card map-card" aria-labelledby="map-title">
+    <div class="map-head">
+      <h2 id="map-title">QUEM LIDERA EM CADA ESTADO?</h2>
+      <label class="picker">Ver estado:
+        <select id="uf-select"><option value="">Brasil</option></select>
+      </label>
+    </div>
+    <div class="map-wrap">
+      <div id="map" class="map"></div>
+      <div id="tip" class="tip" hidden></div>
+    </div>
+    <div class="ufbar" id="ufbar" aria-hidden="true"></div>
+    <ul class="legend" id="legend" aria-label="Legenda e contagem de UFs"></ul>
+    <p class="note">Cor representa o candidato atualmente mais votado em cada UF — não indica estado “ganho” nem resultado definido.</p>
+    <p class="hint">Toque ou clique em um estado para ver a apuração.</p>
+  </section>
+
+  <section class="card state" id="state" aria-live="polite" aria-labelledby="state-title"></section>
+</main>
+
+<footer class="foot">
+  Dados oficiais de divulgação do <a href="https://resultados.tse.jus.br" rel="noopener">TSE</a> · Malha territorial do <a href="https://servicodados.ibge.gov.br/api/docs/malhas?versao=3" rel="noopener">IBGE</a> · Projeto open source: <a href="https://github.com/ryujiee/eleicao" rel="noopener">github.com/ryujiee/eleicao</a>
+</footer>
+</body>
+</html>

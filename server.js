@@ -92,7 +92,7 @@ export function createApp({
     if (keys.length) {
       updatedAt = checkedAt;
       const { BR, ...ufs } = changed;
-      const msg = { updatedAt };
+      const msg = { updatedAt, checkedAt };
       if (BR) msg.national = BR;
       if (Object.keys(ufs).length) msg.states = ufs;
       send(`event: update\ndata: ${JSON.stringify(msg)}\n\n`);
@@ -110,7 +110,8 @@ export function createApp({
     election: { code: election, name: electionName, cargo: 'Presidente' }, updatedAt, checkedAt, national, states,
   }));
   const send = frame => { for (const res of clients) res.write(frame); };
-  const heartbeat = setInterval(() => send(': ping\n\n'), heartbeatMs);
+  // Heartbeat doubles as keep-alive and "verificado às" refresh for the page.
+  const heartbeat = setInterval(() => send(`event: update\ndata: ${JSON.stringify({ checkedAt })}\n\n`), heartbeatMs);
 
   const server = http.createServer(async (req, res) => {
     const path = decodeURIComponent(new URL(req.url, 'http://x').pathname);
