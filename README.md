@@ -30,6 +30,11 @@ revalidado em todo ciclo e, a cada 60 segundos, todos os arquivos passam por uma
 segurança (também condicional, `304` quando nada mudou). O navegador nunca acessa o TSE: tudo
 fica em cache no backend e é distribuído aos clientes por SSE.
 
+A CDN do TSE mantém cada arquivo em cache por até ~60 s e informa o tempo restante em `max-age`;
+o backend respeita esse valor (não adianta perguntar antes: a CDN não teria nada mais novo), o que
+mantém o volume de requisições baixo sem perder atualidade. Os horários do TSE vêm no fuso local
+de cada UF (AC = UTC-5; AM, RR, RO, MT, MS = UTC-4) e são exibidos no horário de Brasília.
+
 A cor de cada UF vem da sigla do partido do candidato (`par.sg` no arquivo do TSE), nunca do nome.
 UF sem seção totalizada ou sem votos não é atribuída a ninguém; empate no 1º lugar não escolhe lado.
 

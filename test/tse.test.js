@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
-import { UFS, abKeys, leaderGroup, normalizeArea } from '../lib/tse.js';
+import { UFS, abKeys, leaderGroup, normalizeArea, toBrasilia } from '../lib/tse.js';
 import { makeU } from './fake-tse.js';
 
 const ab = JSON.parse(readFileSync(new URL('./fixtures/ab.json', import.meta.url)));
@@ -47,6 +47,13 @@ test('PL leads / PT leads / other leads / tie', () => {
 test('sections totalized but zero votes is still waiting', () => {
   const a = normalizeArea('AC', makeU('ac', {}, { st: 5 }));
   assert.equal(a.status, 'waiting');
+});
+
+test('UF local time is converted to Brasília time', () => {
+  assert.deepEqual(toBrasilia('AC', '04/10/2026', '15:25:43'), ['04/10/2026', '17:25:43']);
+  assert.deepEqual(toBrasilia('MT', '04/10/2026', '23:30:00'), ['05/10/2026', '00:30:00']);
+  assert.deepEqual(toBrasilia('SC', '04/10/2026', '17:24:55'), ['04/10/2026', '17:24:55']);
+  assert.deepEqual(toBrasilia('AC', '', ''), ['', '']);
 });
 
 test('ab status file covers 27 UFs + BR, ignores exterior', () => {

@@ -34,6 +34,7 @@ export function createApp({
   const states = Object.fromEntries(Object.keys(UFS).map(uf => [uf, emptyArea(uf)]));
   const area = uf => (uf === 'BR' ? national : states[uf]);
   const etags = new Map();
+  const freshUntil = new Map(); // url -> ms; the TSE CDN cannot return anything newer before its max-age expires
   const seen = {};   // uf -> ab key already reflected in our cached data
   const tries = Object.fromEntries(AREAS.map(uf => [uf, 0]));
   let wanted = {};   // uf -> latest ab key ("dt ht seçõesTotalizadas")
@@ -43,10 +44,13 @@ export function createApp({
   const stats = { requests: 0, notModified: 0, urls: [] };
 
   async function get(url) {
+    if (freshUntil.get(url) > Date.now()) return null;
     const headers = { 'user-agent': UA, accept: 'application/json' };
     if (etags.has(url)) headers['if-none-match'] = etags.get(url);
     stats.requests++; stats.urls.push(url);
     const res = await fetch(url, { headers, signal: AbortSignal.timeout(10_000) });
+    const maxAge = Number(/max-age=(\d+)/.exec(res.headers.get('cache-control'))?.[1] || 0);
+    if (maxAge > 1) freshUntil.set(url, Date.now() + Math.min(maxAge, 60) * 1000);
     if (res.status === 304) { stats.notModified++; return null; }
     if (!res.ok) throw new Error(`HTTP ${res.status} ${url}`);
     const body = await res.json();

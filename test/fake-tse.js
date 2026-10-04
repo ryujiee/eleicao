@@ -27,7 +27,7 @@ export function makeU(uf, votes = {}, { st = 0, dt = st ? '04/10/2026' : '', ht 
   return u;
 }
 
-export async function startFakeTse() {
+export async function startFakeTse({ maxAge = 0 } = {}) {
   const ab = structuredClone(abFixture);
   const files = {};
   const lag = {};
@@ -45,7 +45,7 @@ export async function startFakeTse() {
     if (!body) { res.writeHead(404).end(); return; }
     const etag = `"${createHash('md5').update(body).digest('hex')}"`;
     if (req.headers['if-none-match'] === etag) { res.writeHead(304).end(); return; }
-    res.writeHead(200, { 'content-type': 'application/json', etag }).end(body);
+    res.writeHead(200, { 'content-type': 'application/json', etag, 'cache-control': `max-age=${maxAge}` }).end(body);
   });
   await new Promise(r => server.listen(0, '127.0.0.1', r));
 

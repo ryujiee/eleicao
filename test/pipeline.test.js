@@ -89,16 +89,34 @@ test('live pipeline: detection, per-UF updates, leader changes, independence fro
   up = await sse.next('update');
   assert.equal(up.states.MG.leader, 'OTHER');
 
+  // Acre publishes in local time (UTC-5): shown in Brasília time, and the ab/result keys still match.
+  mark = tse.log.length;
+  tse.publish('ac', { 22: 70, 13: 30 }, 3, '15:35:00');
+  up = await sse.next('update');
+  assert.equal(up.states.AC.ht, '17:35:00');
+  await sleep(200);
+  assert.equal(tse.log.slice(mark).filter(u => u.includes('/ac/')).length, 1, 'no pointless retries for AC');
+
   tse.publish('br', { 22: 5000, 13: 4000 }, 50, '17:34:00');
   up = await sse.next('update');
   assert.equal(up.national.leader, 'PL');
   assert.equal(up.states, undefined);
 
   const final = await (await fetch(`${url}/api/president`)).json();
-  assert.deepEqual(counts(final.states), { PT: 1, PL: 0, OTHER: 1, tie: 1, waiting: 24 });
+  assert.deepEqual(counts(final.states), { PT: 1, PL: 1, OTHER: 1, tie: 1, waiting: 23 });
   assert.equal(final.states.SC.leader, 'PT', 'national result does not leak into states');
   assert.equal(final.national.leader, 'PL');
 
   const health = await (await fetch(`${url}/healthz`)).json();
   assert.equal(health.ok, true);
+});
+
+test('honours the TSE CDN max-age instead of re-polling a cached file', async t => {
+  const tse = await startFakeTse({ maxAge: 30 });
+  const app = createApp({ base: tse.base, pollMs: 40, heartbeatMs: 60_000, log: () => {} });
+  await app.listen(0, '127.0.0.1');
+  t.after(() => { app.stop(); tse.close(); });
+  await sleep(600);
+  assert.equal(tse.log.filter(u => u.endsWith('-ab.json')).length, 1);
+  assert.equal(tse.log.length, 29, 'ab + 28 result files, each fetched once');
 });
