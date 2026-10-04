@@ -45,6 +45,7 @@ export async function startFakeTse({ maxAge = 0 } = {}) {
       const l = lag[m[1]];
       body = JSON.stringify(l && l.remaining-- > 0 ? l.old : files[m[1]]);
     } else if ((m = req.url.match(/\/6259\/dados\/sc\/sc-(c\d{4})-e006259-u\.json$/)) && races[m[1]]) body = JSON.stringify(races[m[1]]);
+    if (/\/6259\/fotos\/sc\/240002551001\.jpeg$/.test(req.url)) { res.writeHead(200, { 'content-type': 'image/jpeg' }).end(Buffer.from([0xff, 0xd8, 0xff])); return; }
     if (!body) { res.writeHead(404, { 'cache-control': `max-age=${maxAge}` }).end(); return; }
     const etag = `"${createHash('md5').update(body).digest('hex')}"`;
     if (req.headers['if-none-match'] === etag) { res.writeHead(304).end(); return; }

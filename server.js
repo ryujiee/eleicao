@@ -161,6 +161,20 @@ export function createApp({
       return;
     }
 
+    // Official candidate photos, proxied (strict pattern, only our elections) and cached by Cloudflare/browsers.
+    const foto = /^\/fotos\/(\d{4,6})\/([a-z]{2})\/(\d{6,16})\.jpeg$/.exec(path);
+    if (foto && [election, stateElection].includes(foto[1])) {
+      try {
+        const r = await fetch(`${base}/${ciclo}/${foto[1]}/fotos/${foto[2]}/${foto[3]}.jpeg`, { headers: { 'user-agent': UA }, signal: AbortSignal.timeout(10_000) });
+        if (!r.ok) { res.writeHead(404, { 'cache-control': 'public, max-age=3600' }).end(); return; }
+        res.writeHead(200, { 'content-type': 'image/jpeg', 'cache-control': 'public, max-age=604800, immutable' });
+        res.end(Buffer.from(await r.arrayBuffer()));
+      } catch {
+        res.writeHead(502).end();
+      }
+      return;
+    }
+
     const file = join(PUBLIC, normalize(path === '/' ? '/index.html' : path));
     if (!file.startsWith(PUBLIC)) { res.writeHead(404).end(); return; }
     try {

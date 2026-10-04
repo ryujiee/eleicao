@@ -124,6 +124,16 @@ test('live pipeline: detection, per-UF updates, leader changes, independence fro
   assert.equal(final.states.SC.leader, 'PT', 'national result does not leak into states');
   assert.equal(final.national.leader, 'PL');
 
+  // Candidate photos: proxied only for our elections and a strict path pattern.
+  assert.equal(final.races.governador.election, '6259');
+  assert.ok(final.races.governador.candidates.every(c => /^\d+$/.test(c.sq)));
+  const foto = await fetch(`${url}/fotos/6259/sc/240002551001.jpeg`);
+  assert.equal(foto.status, 200);
+  assert.equal(foto.headers.get('content-type'), 'image/jpeg');
+  assert.deepEqual([...new Uint8Array(await foto.arrayBuffer())], [0xff, 0xd8, 0xff]);
+  assert.equal((await fetch(`${url}/fotos/9999/sc/240002551001.jpeg`)).status, 404);
+  assert.equal((await fetch(`${url}/fotos/6259/sc/..%2F..%2Fdados.jpeg`)).status, 404);
+
   const health = await (await fetch(`${url}/healthz`)).json();
   assert.equal(health.ok, true);
 });

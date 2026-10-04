@@ -56,6 +56,10 @@ function partyColor(name) {
 }
 const pstyle = name => { const c = partyColor(name); return `style="background:${c};color:${c.startsWith('var') ? '#fff' : '#0d1424'}"`; };
 const partyBadge = (label, colourBy = label) => `<span class="party" ${pstyle(colourBy)}>${esc(label)}</span>`;
+// Official TSE candidate photos, served through our backend (/fotos/<eleição>/<uf|br>/<sq>.jpeg).
+const presPhoto = c => (c.sq && S.snap?.election?.code ? `/fotos/${S.snap.election.code}/br/${c.sq}.jpeg` : '');
+const racePhoto = (r, c) => (c.sq && r.election ? `/fotos/${r.election}/${r.uf.toLowerCase()}/${c.sq}.jpeg` : '');
+const photo = url => `<img class="ph" ${url ? `src="${url}"` : ''} alt="" loading="lazy" decoding="async" onerror="this.removeAttribute('src')">`;
 
 const RACES = {
   governador: { title: 'GOVERNADOR — SANTA CATARINA', lead: 'Liderando', note: 'O destaque indica apenas quem lidera neste momento. A situação oficial (eleito ou 2º turno) só aparece quando definida pelo TSE.' },
@@ -198,7 +202,7 @@ function select(uf, fromMap) {
 function candRow(c, i, small) {
   const cls = partyCls(c.party);
   return `<div class="cand${small ? ' sm' : ''}">
-    <span class="pos">${i + 1}º</span>
+    <span class="pos">${i + 1}º</span>${photo(presPhoto(c))}
     <span class="nm">${esc(nice(c.name))}${partyBadge(c.party)}</span>
     <span class="pc">${pct(c.pct)}</span>
     <span class="vt"><b>${int(c.votes)}</b> votos</span>
@@ -228,7 +232,7 @@ function renderNational() {
   $('nat-margin').innerHTML = n.status === 'waiting' ? 'Aguardando primeira totalização'
     : n.status === 'tie' ? '<b>Empate momentâneo</b> entre 1º e 2º'
     : `Diferença entre 1º e 2º: <b>${int(n.margin)}</b> votos`;
-  $('nat-rest').innerHTML = c.slice(2).map((x, i) => `<li><span>${i + 3}º ${esc(nice(x.name))}${partyBadge(x.party)}<br><span class="v">${int(x.votes)} votos</span></span><span class="p">${pct(x.pct)}</span></li>`).join('');
+  $('nat-rest').innerHTML = c.slice(2).map((x, i) => `<li>${photo(presPhoto(x))}<span>${i + 3}º ${esc(nice(x.name))}${partyBadge(x.party)}<br><span class="v">${int(x.votes)} votos</span></span><span class="p">${pct(x.pct)}</span></li>`).join('');
   $('nat-rest-wrap').hidden = c.length <= 2;
 }
 
@@ -293,7 +297,7 @@ function renderState() {
   const c = a.candidates || [];
   card.innerHTML = head
     + `<div class="list">${c.slice(0, 3).map((x, i) => candRow(x, i, true)).join('')}</div>`
-    + (c.length > 3 ? `<details class="others"><summary>Todos os candidatos (${c.length})</summary><ol class="rest">${c.slice(3).map((x, i) => `<li><span>${i + 4}º ${esc(nice(x.name))}${partyBadge(x.party)}<br><span class="v">${int(x.votes)} votos</span></span><span class="p">${pct(x.pct)}</span></li>`).join('')}</ol></details>` : '')
+    + (c.length > 3 ? `<details class="others"><summary>Todos os candidatos (${c.length})</summary><ol class="rest">${c.slice(3).map((x, i) => `<li>${photo(presPhoto(x))}<span>${i + 4}º ${esc(nice(x.name))}${partyBadge(x.party)}<br><span class="v">${int(x.votes)} votos</span></span><span class="p">${pct(x.pct)}</span></li>`).join('')}</ol></details>` : '')
     + facts(a);
 }
 
@@ -386,7 +390,7 @@ function renderRaceList(r) {
     list.className = 'race-list maj';
     note.textContent = '';
     list.innerHTML = c.map(x => `<li class="cand rc${x.inSeats && x.valid ? ' in' : ''}${x.elected ? ' el' : ''}">
-      <span class="pos">${x.rank}º</span>
+      <span class="pos">${x.rank}º</span>${photo(racePhoto(r, x))}
       <span class="nm">${esc(nice(x.name))}${partyBadge(x.party)}</span>
       <span class="pc">${pct(x.pct)}</span>
       <span class="vt"><b>${int(x.votes)}</b> votos ${badges(x, r)}</span>
@@ -405,7 +409,7 @@ function renderRaceList(r) {
       : `Todos os ${int(r.candidates.length)} candidatos, por ordem de votos.`;
   list.className = 'race-list prop';
   list.innerHTML = c.length ? c.map(x => `<li class="row${x.elected ? ' el' : x.entering ? ' in' : ''}">
-      <span class="rk">${x.rank}º</span>
+      <span class="rk">${x.rank}º</span>${photo(racePhoto(r, x))}
       <span class="who"><b>${esc(nice(x.name))}</b> <span class="num">${esc(x.number)}</span><br>${partyBadge(x.party, x.coalition)}${x.coalition && x.coalition !== x.party ? `<span class="co">${esc(x.coalition)}</span>` : ''}${badges(x, r, view)}</span>
       <span class="nums"><b>${int(x.votes)}</b><span>${pct(x.pct)}</span></span>
     </li>`).join('') : `<li class="none">${q ? 'Nenhum candidato encontrado.' : r.status === 'waiting' ? 'Aguardando primeira totalização.' : 'Nenhuma vaga distribuída ainda.'}</li>`;
