@@ -1,0 +1,20 @@
+[Unit]
+Description=Eleicao 2026 - apuracao presidencial em tempo real (TSE)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+User=eleicao
+WorkingDirectory=/opt/eleicao
+Environment=PORT=3026 HOST=127.0.0.1
+ExecStart=/usr/bin/node server.js
+Restart=always
+RestartSec=2
+MemoryMax=256M
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target

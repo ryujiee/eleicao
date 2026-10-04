@@ -1,0 +1,13 @@
+{
+  "name": "eleicao",
+  "version": "1.0.0",
+  "description": "Apuração presidencial 2026 em tempo real com mapa por UF, a partir dos dados oficiais do TSE",
+  "type": "module",
+  "license": "MIT",
+  "engines": { "node": ">=20" },
+  "scripts": {
+    "start": "node server.js",
+    "test": "node --test test/*.test.js",
+    "build:map": "node scripts/build-map.mjs intermediaria"
+  }
+}
