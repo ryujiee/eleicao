@@ -1,7 +1,8 @@
-# Eleições 2026 — apuração presidencial em tempo real
+# Eleições 2026 — apuração em tempo real
 
-Dashboard aberto da apuração para Presidente com mapa interativo do Brasil por UF, alimentado
-exclusivamente pelos arquivos oficiais de divulgação do TSE (`resultados.tse.jus.br`).
+Dashboard aberto da apuração (Presidente com mapa interativo do Brasil por UF; Governador, Senado,
+Deputado Federal e Deputado Estadual de Santa Catarina), alimentado exclusivamente pelos arquivos
+oficiais de divulgação do TSE (`resultados.tse.jus.br`).
 
 Produção: https://eleicao.infinitytech.net.br
 
@@ -10,6 +11,11 @@ Produção: https://eleicao.infinitytech.net.br
   PT em vermelho, PL em verde, demais em cinza, UF sem totalização tracejada, empate com aparência própria.
 - Contador de UFs (PT + PL + Outros + Empate + Aguardando = 27).
 - Clique/toque no estado ou seletor "Ver estado" para ver 1º/2º/3º, votos, diferença, seções e horário.
+- % de apuração própria de cada UF (seções totalizadas / total) no cartão, no tooltip e, no desktop, no mapa.
+- Abas Governador, Senado, Federal e Estadual de SC. Nos cargos proporcionais, "Entrando" vem da
+  distribuição parcial de vagas por agremiação calculada pelo TSE (`agr.vag`: quociente partidário e
+  médias), preenchida pelos mais votados de cada lista — não do ranking geral de votos. Quando o TSE
+  publica a situação oficial (`st`/`e`), ela substitui a projeção. Nada é chamado de "eleito" antes disso.
 - Atualização ao vivo via Server-Sent Events; só os estados que mudaram são redesenhados.
 
 ## Como os dados do TSE são consumidos
@@ -21,6 +27,10 @@ Estrutura descoberta em `https://resultados.tse.jus.br/oficial/comum/config/ele-
 | --- | --- |
 | `ele2026/6257/dados/br/br-e006257-ab.json` | Um único arquivo com o andamento de todas as UFs (data/hora da última totalização e seções totalizadas). |
 | `ele2026/6257/dados/<uf>/<uf>-c0001-e006257-u.json` | Resultado presidencial de uma UF (ou `br` para o nacional). |
+| `ele2026/6259/dados/sc/sc-c0003-e006259-u.json` | Governador SC (eleição estadual `6259`; 2º turno = `6260`). |
+| `ele2026/6259/dados/sc/sc-c0005-e006259-u.json` | Senador SC. |
+| `ele2026/6259/dados/sc/sc-c0006-e006259-u.json` | Deputado Federal SC (com `qe` e vagas por agremiação). |
+| `ele2026/6259/dados/sc/sc-c0007-e006259-u.json` | Deputado Estadual SC. |
 
 A cada 3 segundos o backend verifica quais arquivos podem ter novidade, sempre com requisições
 condicionais (`If-None-Match`; sem mudança, a resposta é `304` vazia):
@@ -51,6 +61,7 @@ npm run build:map  # regenera public/brasil.svg a partir da API de malhas do IBG
 ```
 
 Variáveis: `PORT`, `HOST`, `POLL_MS` (padrão 3000), `TSE_ELECTION` (padrão `6257`; use `6258` no 2º turno),
+`TSE_STATE_ELECTION` (padrão `6259`; `6260` no 2º turno), `STATE_UF` (padrão `SC`),
 `TSE_CICLO` (padrão `ele2026`), `ELECTION_NAME`, `TSE_BASE`.
 
 API: `GET /api/president` (snapshot), `GET /api/stream` (SSE: `snapshot` ao conectar, depois `update`
