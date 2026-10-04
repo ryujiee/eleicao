@@ -21,7 +21,7 @@ export function createApp({
   election = process.env.TSE_ELECTION || '6257', // 1º turno; 2º turno = 6258
   electionName = process.env.ELECTION_NAME || 'Eleição Ordinária Federal - 2026 1º Turno',
   pollMs = Number(process.env.POLL_MS) || 3_000, // TSE CDN serves the ab file with max-age=2; unchanged = 304
-  fullRefreshMs = 5 * 60_000,
+  fullRefreshMs = 60_000,
   heartbeatMs = 20_000,
   log = (...a) => console.log(new Date().toISOString(), ...a),
 } = {}) {
@@ -62,13 +62,14 @@ export function createApp({
     return true;
   }
 
-  // One cycle = 1 conditional request for the ab status file + 1 request per area whose status changed.
+  // One cycle = conditional requests for the ab status file and the national result (304 when unchanged)
+  // + 1 request per UF whose status line changed.
   async function cycle() {
     const ab = await get(abUrl);
     if (ab) wanted = abKeys(ab);
-    const full = Date.now() - lastFull > fullRefreshMs; // safety net; unchanged files answer 304
+    const full = Date.now() - lastFull > fullRefreshMs; // safety net in case ab lags; unchanged files answer 304
     if (full) lastFull = Date.now();
-    const dirty = AREAS.filter(uf => full || !(uf in seen) || (wanted[uf] !== undefined && wanted[uf] !== seen[uf]));
+    const dirty = AREAS.filter(uf => uf === 'BR' || full || !(uf in seen) || (wanted[uf] !== undefined && wanted[uf] !== seen[uf]));
     const changed = {};
     await mapLimit(dirty, 4, async uf => {
       try {

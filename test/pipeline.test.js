@@ -57,12 +57,13 @@ test('live pipeline: detection, per-UF updates, leader changes, independence fro
   assert.deepEqual(counts(snap.states), { PT: 0, PL: 0, OTHER: 0, tie: 0, waiting: 27 });
   assert.equal(snap.national.status, 'waiting');
 
-  // Idle: only the single ab status file is polled, never the 28 result files.
+  // Idle: only the ab status file and the national result are revalidated, never the 27 UF files.
   let mark = tse.log.length;
   await sleep(250);
   const idle = tse.log.slice(mark);
   assert.ok(idle.length >= 2);
-  assert.ok(idle.every(u => u.endsWith('-ab.json')), idle.join('\n'));
+  const cheap = u => u.endsWith('-ab.json') || u.endsWith('/br/br-c0001-e006257-u.json');
+  assert.ok(idle.every(cheap), idle.join('\n'));
 
   mark = tse.log.length;
   tse.publish('sc', { 22: 1000, 13: 500 }, 10, '17:30:00');
@@ -72,7 +73,7 @@ test('live pipeline: detection, per-UF updates, leader changes, independence fro
   assert.equal(up.states.SC.leader, 'PL');
   assert.equal(up.states.SC.margin, 500);
   assert.equal(up.states.SC.ht, '17:30:00');
-  assert.deepEqual([...new Set(tse.log.slice(mark).filter(u => !u.endsWith('-ab.json')))], ['/oficial/ele2026/6257/dados/sc/sc-c0001-e006257-u.json']);
+  assert.deepEqual([...new Set(tse.log.slice(mark).filter(u => !cheap(u)))], ['/oficial/ele2026/6257/dados/sc/sc-c0001-e006257-u.json']);
 
   tse.publish('sc', { 22: 1000, 13: 1600 }, 20, '17:31:00');
   up = await sse.next('update');
