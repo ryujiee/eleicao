@@ -3,8 +3,8 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>Eleições 2026 — Apuração para Presidente ao vivo</title>
-<meta name="description" content="Apuração em tempo real da eleição presidencial de 2026, com dados oficiais do TSE e mapa interativo de quem lidera em cada estado.">
+<title>Eleições 2026 — Apuração ao vivo: Presidente e Santa Catarina</title>
+<meta name="description" content="Apuração em tempo real das eleições de 2026 com dados oficiais do TSE: Presidente (com mapa de quem lidera em cada estado), Governador, Senado, Deputados Federais e Estaduais de Santa Catarina.">
 <meta name="theme-color" content="#0a0f1c">
 <link rel="stylesheet" href="style.css">
 <link rel="preload" href="brasil.svg" as="fetch" crossorigin>
@@ -16,12 +16,20 @@
     <h1>ELEIÇÕES 2026</h1>
     <span id="live" class="live off" role="status">● CONECTANDO</span>
   </div>
-  <div class="apurado"><strong id="nat-pct">–</strong> <span>apurado</span></div>
+  <div class="apurado"><strong id="nat-pct">–</strong> <span>apurado · <em id="apur-scope">Brasil</em></span></div>
   <div class="bar" aria-hidden="true"><i id="nat-bar"></i></div>
   <p class="meta" id="meta">Aguardando dados do TSE…</p>
 </header>
 
-<main class="grid">
+<nav class="tabs" id="tabs" role="tablist" aria-label="Cargos">
+  <a role="tab" href="#presidente" data-tab="presidente">Presidente</a>
+  <a role="tab" href="#governador" data-tab="governador">Governador</a>
+  <a role="tab" href="#senado" data-tab="senado">Senado</a>
+  <a role="tab" href="#federal" data-tab="federal">Federal</a>
+  <a role="tab" href="#estadual" data-tab="estadual">Estadual</a>
+</nav>
+
+<main id="panel-presidente" class="grid" role="tabpanel">
   <section class="card nat" aria-labelledby="nat-title">
     <h2 id="nat-title">PRESIDENTE — BRASIL</h2>
     <div id="nat-top" class="top2"></div>
@@ -50,6 +58,21 @@
   </section>
 
   <section class="card state" id="state" aria-live="polite" aria-labelledby="state-title"></section>
+</main>
+
+<main id="panel-race" class="race-grid" role="tabpanel" hidden>
+  <section class="card race-head" id="race-head" aria-live="polite"></section>
+  <section class="card race-body">
+    <div id="race-parties" class="parties"></div>
+    <div id="race-filters" class="filters" role="group" aria-label="Filtrar candidatos">
+      <button type="button" data-f="in">Entrando/Eleitos <span></span></button>
+      <button type="button" data-f="top">Mais votados <span></span></button>
+      <button type="button" data-f="all">Todos <span></span></button>
+    </div>
+    <input id="race-search" class="search" type="search" placeholder="Buscar por nome, partido ou número" autocomplete="off" aria-label="Buscar candidato">
+    <p id="race-note" class="race-note"></p>
+    <ol id="race-list" class="race-list"></ol>
+  </section>
 </main>
 
 <footer class="foot">

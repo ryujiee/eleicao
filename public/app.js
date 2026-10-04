@@ -1,4 +1,5 @@
-// Presidential dashboard: national result + live map of who leads in each UF.
+// Election dashboard: Presidente (national result + live map of who leads in each UF) and the
+// Santa Catarina races (Governador, Senado, Deputados Federais/Estaduais).
 // Data comes only from our backend (/api/president snapshot + /api/stream SSE updates).
 
 const UFS = [
@@ -28,8 +29,23 @@ const areaCls = a => (!a || a.status === 'waiting' ? 'waiting' : a.status === 't
 const CLS_TEXT = { pt: 'PT lidera', pl: 'PL lidera', other: 'Outro partido lidera', tie: 'Empate momentâneo', waiting: 'Aguardando primeira totalização' };
 const clock = iso => (iso ? new Date(iso).toLocaleTimeString('pt-BR', { timeZone: 'America/Sao_Paulo' }) : '');
 const coarse = matchMedia('(pointer: coarse)');
+// Per-state % apurado inside the map only where there is room (desktop with a mouse); elsewhere only for the selected state.
+const wide = matchMedia('(min-width: 980px)');
+const roomy = () => wide.matches && !coarse.matches;
+const pct1 = n => (n || 0).toLocaleString('pt-BR', { minimumFractionDigits: 1, maximumFractionDigits: 1 }) + '%';
+const fold = s => String(s || '').normalize('NFD').replace(/\p{Diacritic}/gu, '').toLowerCase();
+// Agremiação colour: a list that includes PT or PL takes that colour, anything else is "outros".
+const coalCls = name => { const t = String(name || '').toUpperCase().split('/').map(x => x.trim()); return t.includes('PT') ? 'pt' : t.includes('PL') ? 'pl' : 'other'; };
 
-const S = { snap: null, sel: null, keys: {}, natKey: '', selKey: '', els: {} };
+const RACES = {
+  governador: { title: 'GOVERNADOR — SANTA CATARINA', lead: 'Liderando', note: 'O destaque indica apenas quem lidera neste momento. A situação oficial (eleito ou 2º turno) só aparece quando definida pelo TSE.' },
+  senado: { title: 'SENADO — SANTA CATARINA', lead: 'Nas 2 vagas (parcial)', note: 'Duas vagas em disputa. Destaque não significa eleição — situação oficial só após definição do TSE.' },
+  federal: { title: 'DEPUTADOS FEDERAIS — SANTA CATARINA' },
+  estadual: { title: 'DEPUTADOS ESTADUAIS — SANTA CATARINA' },
+};
+const TABS = ['presidente', ...Object.keys(RACES)];
+
+const S = { snap: null, sel: null, keys: {}, natKey: '', selKey: '', els: {}, tab: 'presidente', raceKey: '', listKey: '', filter: {}, query: '' };
 
 // ---------- Map ----------
 async function loadMap() {
@@ -76,7 +92,10 @@ async function loadMap() {
       el('text', { class: 'lbl', x: DF_LABEL[0], y: DF_LABEL[1] }, labels).textContent = uf;
       el('circle', { class: 'hitdf', cx: x, cy: y, r: 30, 'data-uf': uf }, chips);
     } else {
-      el('text', { class: 'lbl', x, y }, labels).textContent = uf;
+      item.sig = el('text', { class: 'lbl', x, y }, labels);
+      item.sig.textContent = uf;
+      item.pc = el('text', { class: 'lbl pc', x, y: y + 15, visibility: 'hidden' }, labels);
+      item.fits = +path.dataset.lr >= 26;
     }
     S.els[uf] = item;
   }
@@ -94,6 +113,23 @@ async function loadMap() {
     hover(t ? t.dataset.uf : null, e);
   });
   svg.addEventListener('pointerleave', () => hover(null));
+  wide.addEventListener('change', renderPctLabels);
+  coarse.addEventListener('change', renderPctLabels);
+}
+
+// Two-line label (sigla + % apurado) for states with room on desktop, and always for the selected state.
+function renderPctLabels() {
+  for (const [uf] of UFS) {
+    const it = S.els[uf];
+    if (!it?.pc) continue;
+    const a = S.snap?.states?.[uf];
+    const show = !!a && a.status !== 'waiting' && ((roomy() && it.fits) || uf === S.sel);
+    const y = +it.path.dataset.ly;
+    it.pc.textContent = show ? pct1(a.sections.pct) : '';
+    it.pc.setAttribute('visibility', show ? 'visible' : 'hidden');
+    it.sig.setAttribute('y', show ? y - 11 : y);
+    it.pc.setAttribute('y', y + 15);
+  }
 }
 
 function hover(uf, e) {
@@ -111,7 +147,7 @@ function hover(uf, e) {
 
 function tipHtml(uf) {
   const a = S.snap?.states?.[uf];
-  const head = `<b>${esc(NAME[uf])}</b><div class="mut">${a ? pct(a.sections.pct) + ' apurado' : 'sem dados'}</div>`;
+  const head = `<b>${esc(NAME[uf])}</b><div class="mut">${a ? `Apuração: <b>${pct(a.sections.pct)}</b>` : 'sem dados'}</div>`;
   if (!a || a.status === 'waiting') return head + `<div class="r">Aguardando primeira totalização</div>`;
   const rows = a.candidates.slice(0, 2).map((c, i) => `<div class="r"><span>${i + 1}º ${esc(nice(c.name))} <span class="mut">${esc(c.party)}</span></span><b>${pct(c.pct)}</b></div>`).join('');
   return head + (a.status === 'tie' ? '<div class="r"><b>Empate momentâneo</b></div>' : '') + rows;
@@ -128,9 +164,10 @@ function select(uf, fromMap) {
     item.chip?.parentNode.classList.toggle('sel', k === S.sel);
   }
   S.els.sel.setAttribute('d', S.sel ? S.els[S.sel].path.getAttribute('d') : '');
-  history.replaceState(null, '', S.sel ? `#${S.sel}` : location.pathname + location.search);
+  history.replaceState(null, '', S.sel ? `#${S.sel}` : '#presidente');
   S.selKey = '';
   renderState();
+  renderPctLabels();
   if (fromMap && coarse.matches) {
     const card = $('state');
     if (card.getBoundingClientRect().top > innerHeight - 120) card.scrollIntoView({ behavior: 'smooth', block: 'start' });
@@ -150,7 +187,10 @@ function candRow(c, i, small) {
 }
 
 function renderHeader() {
-  const n = S.snap.national;
+  const race = S.tab !== 'presidente';
+  const n = race ? S.snap.races?.[S.tab] : S.snap.national;
+  $('apur-scope').textContent = race ? 'Santa Catarina' : 'Brasil';
+  if (!n) { $('nat-pct').textContent = '–'; $('nat-bar').style.width = '0'; $('meta').textContent = 'Aguardando dados deste cargo…'; return; }
   $('nat-pct').textContent = pct(n.sections.pct);
   $('nat-bar').style.width = `${Math.min(100, n.sections.pct || 0)}%`;
   const tse = n.ht ? `Última totalização do TSE: ${esc(n.ht)}${n.dt ? ` (${esc(n.dt)})` : ''}` : 'Aguardando primeira totalização do TSE';
@@ -218,8 +258,14 @@ function renderState() {
   if (key === S.selKey) return;
   S.selKey = key;
   const cls = areaCls(a);
+  const sec = a?.sections || { pct: 0, counted: 0, total: 0 };
   const head = `<h2 id="state-title">📍 ${esc(NAME[S.sel].toUpperCase())} <span class="badge ${cls}">${CLS_TEXT[cls]}</span></h2>
-    <div class="sub"><b>${pct(a?.sections?.pct)}</b> apurado</div>`;
+    <div class="apur">
+      <span class="k">Apuração em ${esc(NAME[S.sel])}</span>
+      <b>${pct(sec.pct)}</b>
+      <div class="bar"><i style="width:${Math.min(100, sec.pct || 0)}%"></i></div>
+      <span class="s">${sec.total ? `${int(sec.counted)} / ${int(sec.total)} seções totalizadas` : 'Seções: sem dados'}</span>
+    </div>`;
   if (!a || a.status === 'waiting') {
     card.innerHTML = head + `<p class="waitmsg">Aguardando primeira totalização</p>` + facts(a);
     return;
@@ -236,7 +282,6 @@ function facts(a) {
   const diff = a.status === 'tie' ? 'Empate momentâneo' : a.margin == null ? '—' : `${int(a.margin)} votos`;
   return `<dl class="facts">
     <dt>Diferença entre 1º e 2º</dt><dd>${diff}</dd>
-    <dt>Seções totalizadas</dt><dd>${int(a.sections.counted)} / ${int(a.sections.total)}</dd>
     <dt>Última atualização</dt><dd>${a.ht ? esc(a.ht) : '—'}</dd>
   </dl>`;
 }
@@ -248,6 +293,128 @@ function render(first) {
   for (const [uf] of UFS) renderUF(uf, first);
   renderCounts();
   renderState();
+  renderPctLabels();
+  if (S.tab !== 'presidente') renderRace();
+}
+
+// ---------- Santa Catarina races ----------
+function badges(c, r, view) {
+  let b = '';
+  if (c.official) b += `<span class="st ${c.elected ? 'st-el' : /suplente/i.test(c.official) ? 'st-sup' : /turno/i.test(c.official) ? 'st-2t' : 'st-out'}">${esc(c.official)}</span>`;
+  else if (c.entering) b += '<span class="st st-in">Entrando</span>';
+  else if (c.inSeats && c.valid) b += `<span class="st st-lead">${esc(RACES[r.key]?.lead || 'Nas vagas (parcial)')}</span>`;
+  else if (view === 'top' && r.proportional && !r.officialAvailable && c.rank <= r.seats && r.status !== 'waiting') b += '<span class="st st-off">Fora das vagas</span>';
+  if (!c.valid) b += '<span class="st st-sj">sub judice</span>';
+  return b;
+}
+
+function renderRace() {
+  const r = S.snap?.races?.[S.tab];
+  const meta = RACES[S.tab];
+  const key = S.tab + JSON.stringify(r);
+  if (key !== S.raceKey) {
+    S.raceKey = key;
+    renderRaceHead(r, meta);
+  }
+  renderRaceList(r);
+}
+
+function renderRaceHead(r, meta) {
+  const head = $('race-head');
+  $('race-parties').hidden = $('race-filters').hidden = $('race-search').hidden = !r?.proportional;
+  if (!r) {
+    head.innerHTML = `<h2>${meta.title}</h2><p class="waitmsg">Aguardando dados deste cargo no servidor…</p>`;
+    return;
+  }
+  const c = r.candidates || [];
+  const kpi = (v, k) => `<div class="kpi"><b>${v}</b><span>${k}</span></div>`;
+  let kpis = kpi(pct(r.sections.pct), 'apurado em SC')
+    + kpi(`${int(r.sections.counted)} / ${int(r.sections.total)}`, 'seções totalizadas')
+    + kpi(r.seats === 1 ? '1 vaga' : `${r.seats} vagas`, 'em disputa');
+  if (r.proportional) kpis += kpi(r.qe ? int(r.qe) : '—', 'quociente eleitoral (parcial)');
+  else if (r.status !== 'waiting' && r.margin != null) kpis += kpi(int(r.margin), 'votos entre 1º e 2º');
+  if (r.key === 'senado' && r.status !== 'waiting' && c.length > 2) kpis += kpi(int(c[1].votes - c[2].votes), 'votos entre 2º e 3º (linha das 2 vagas)');
+  const status = r.final ? '<b>Totalização final</b>' : r.status === 'waiting' ? 'Aguardando primeira totalização' : 'Apuração em andamento';
+  head.innerHTML = `<h2>${meta.title}</h2>
+    <div class="bar"><i style="width:${Math.min(100, r.sections.pct || 0)}%"></i></div>
+    <div class="kpis">${kpis}</div>
+    <p class="meta">${status}${r.ht ? ` · última totalização do TSE: ${esc(r.ht)}${r.dt ? ` (${esc(r.dt)})` : ''}` : ''}</p>
+    ${r.proportional ? '' : `<p class="note">${meta.note}</p>`}`;
+  if (r.proportional) {
+    const total = (r.parties || []).reduce((n, p) => n + p.seats, 0);
+    $('race-parties').innerHTML = total
+      ? `<h3>Vagas por agremiação <span>(distribuição parcial do TSE · ${total}/${r.seats})</span></h3>
+         <div class="seatbar">${r.parties.map(p => `<i class="bg-${coalCls(p.name)}" style="flex-grow:${p.seats}" title="${esc(p.name)}: ${p.seats}"></i>`).join('')}</div>
+         <div class="seats">${r.parties.map(p => `<span class="seat"><i class="sw ${coalCls(p.name)}"></i>${esc(p.name)}<b>${p.seats}</b></span>`).join('')}</div>`
+      : '<h3>Vagas por agremiação</h3><p class="race-note">Nenhuma vaga distribuída ainda.</p>';
+    const n = c.filter(x => x.elected || x.entering).length;
+    const [fin, ftop, fall] = $('race-filters').querySelectorAll('span');
+    fin.textContent = n; ftop.textContent = Math.min(50, c.length); fall.textContent = c.length;
+  }
+}
+
+function renderRaceList(r) {
+  const view = r?.proportional ? (S.filter[S.tab] || 'in') : 'all';
+  const key = S.raceKey + view + S.query;
+  if (key === S.listKey) return;
+  S.listKey = key;
+  for (const b of $('race-filters').querySelectorAll('button')) b.setAttribute('aria-pressed', b.dataset.f === view);
+  const list = $('race-list'), note = $('race-note');
+  if (!r) { list.innerHTML = ''; note.textContent = ''; return; }
+  let c = r.candidates || [];
+  if (!r.proportional) {
+    list.className = 'race-list maj';
+    note.textContent = '';
+    list.innerHTML = c.map(x => `<li class="cand rc${x.inSeats && x.valid ? ' in' : ''}${x.elected ? ' el' : ''}">
+      <span class="pos">${x.rank}º</span>
+      <span class="nm">${esc(nice(x.name))}<span class="party bg-${partyCls(x.party)} ${partyCls(x.party)}">${esc(x.party)}</span></span>
+      <span class="pc">${pct(x.pct)}</span>
+      <span class="vt"><b>${int(x.votes)}</b> votos ${badges(x, r)}</span>
+      <span class="meter"><i class="bg-${partyCls(x.party)}" style="width:${Math.min(100, x.pct || 0)}%"></i></span>
+    </li>`).join('');
+    return;
+  }
+  if (view === 'in') c = c.filter(x => x.elected || x.entering);
+  else if (view === 'top') c = c.slice(0, 50);
+  const q = fold(S.query.trim());
+  if (q) c = c.filter(x => fold(`${x.name} ${x.number} ${x.party} ${x.coalition}`).includes(q));
+  note.innerHTML = view === 'in'
+    ? (r.officialAvailable ? '<b>Situação oficial do TSE.</b>' : '<b>Entrando pela distribuição parcial de vagas do TSE</b> (quociente partidário e médias) — não é resultado oficial. Muda a cada nova totalização.')
+    : view === 'top'
+      ? '<b>Mais votados ≠ quem entra.</b> No sistema proporcional as cadeiras vão primeiro para as agremiações (quociente partidário e médias) e depois para os mais votados de cada lista: um candidato muito votado pode ficar de fora e outro com menos votos pode entrar.'
+      : `Todos os ${int(r.candidates.length)} candidatos, por ordem de votos.`;
+  list.className = 'race-list prop';
+  list.innerHTML = c.length ? c.map(x => `<li class="row${x.elected ? ' el' : x.entering ? ' in' : ''}">
+      <span class="rk">${x.rank}º</span>
+      <span class="who"><b>${esc(nice(x.name))}</b> <span class="num">${esc(x.number)}</span><br><span class="party bg-${partyCls(x.party)} ${partyCls(x.party)}">${esc(x.party)}</span>${x.coalition && x.coalition !== x.party ? `<span class="co">${esc(x.coalition)}</span>` : ''}${badges(x, r, view)}</span>
+      <span class="nums"><b>${int(x.votes)}</b><span>${pct(x.pct)}</span></span>
+    </li>`).join('') : `<li class="none">${q ? 'Nenhum candidato encontrado.' : r.status === 'waiting' ? 'Aguardando primeira totalização.' : 'Nenhuma vaga distribuída ainda.'}</li>`;
+}
+
+// ---------- Tabs / routing ----------
+function route() {
+  const h = decodeURIComponent(location.hash.slice(1));
+  const tab = TABS.includes(h.toLowerCase()) ? h.toLowerCase() : 'presidente';
+  setTab(tab);
+  if (tab === 'presidente' && NAME[h.toUpperCase()]) select(h.toUpperCase());
+}
+function setTab(tab) {
+  const changed = S.tab !== tab;
+  S.tab = tab;
+  for (const a of $('tabs').querySelectorAll('a')) {
+    const on = a.dataset.tab === tab;
+    a.setAttribute('aria-selected', on);
+    if (on && changed) a.scrollIntoView({ block: 'nearest', inline: 'nearest' });
+  }
+  $('panel-presidente').hidden = tab !== 'presidente';
+  $('panel-race').hidden = tab === 'presidente';
+  if (changed) {
+    S.raceKey = S.listKey = '';
+    $('race-search').value = S.query = '';
+    const top = $('tabs').offsetTop;
+    if (scrollY > top) scrollTo({ top });
+  }
+  if (S.snap) { renderHeader(); if (tab !== 'presidente') renderRace(); }
 }
 
 // ---------- Data ----------
@@ -262,6 +429,7 @@ function applyUpdate(u) {
   if (u.states) Object.assign(S.snap.states, u.states);
   if (u.updatedAt) S.snap.updatedAt = u.updatedAt;
   if (u.checkedAt) S.snap.checkedAt = u.checkedAt;
+  if (u.races) S.snap.races = { ...S.snap.races, ...u.races };
   render(false);
 }
 async function fetchSnapshot() {
@@ -287,10 +455,16 @@ function connect() {
 // ---------- Boot ----------
 $('uf-select').insertAdjacentHTML('beforeend', UFS.map(([uf, nm]) => `<option value="${uf}">${nm}</option>`).join(''));
 $('uf-select').addEventListener('change', e => select(e.target.value));
+$('race-filters').addEventListener('click', e => {
+  const b = e.target.closest('button');
+  if (b) { S.filter[S.tab] = b.dataset.f; renderRaceList(S.snap?.races?.[S.tab]); }
+});
+$('race-search').addEventListener('input', e => { S.query = e.target.value; renderRaceList(S.snap?.races?.[S.tab]); });
+addEventListener('hashchange', route);
 renderState();
 await loadMap();
-const initial = location.hash.slice(1).toUpperCase();
-fetchSnapshot().then(() => NAME[initial] && select(initial));
+route();
+fetchSnapshot().then(route);
 connect();
 // Safety net if the stream is down (e.g. proxy buffering): poll the cached snapshot.
 setInterval(() => { if (es.readyState !== EventSource.OPEN) fetchSnapshot(); }, 30000);
