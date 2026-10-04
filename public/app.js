@@ -69,7 +69,7 @@ const RACES = {
 };
 const TABS = ['presidente', ...Object.keys(RACES)];
 
-const S = { snap: null, sel: null, keys: {}, natKey: '', selKey: '', els: {}, tab: 'presidente', raceKey: '', listKey: '', filter: {}, query: '' };
+const S = { snap: null, sel: null, keys: {}, natKey: '', selKey: '', els: {}, tab: 'presidente', raceKey: '', listKey: '', filter: {}, query: '', resKey: '', resAll: {} };
 
 // ---------- Map ----------
 async function loadMap() {
@@ -440,7 +440,7 @@ function setTab(tab) {
     const top = $('tabs').offsetTop;
     if (scrollY > top) scrollTo({ top });
   }
-  if (S.snap) { renderHeader(); if (tab !== 'presidente') renderRace(); }
+  if (S.snap) { renderHeader(); renderResults(); if (tab !== 'presidente') renderRace(); }
 }
 
 // ---------- Defined results (top of the page) ----------
@@ -461,35 +461,50 @@ function outcome(cands = [], defined, seats) {
 function resPerson(c, url, label) {
   return `<div class="res-p">${photo(url)}<div><b>${esc(nice(c.name))}</b>${partyBadge(c.party)}${label ? `<span class="st ${label[1]}">${esc(label[0])}</span>` : ''}<span class="v">${pct(c.pct)} · ${int(c.votes)} votos</span></div></div>`;
 }
+const PREVIEW = 6; // proportional races: elected shown before "Ver todos"
 function resCard(tab, head, area, o, ph) {
   const src = o.official ? (area.final ? 'Resultado oficial do TSE · totalização final' : 'Situação oficial do TSE') : 'Matematicamente definido pelo TSE · apuração em andamento';
+  const many = o.people.length > 2;
   const tag = o.kind === 'rr' ? `2º turno · ${RUNOFF_DATE}` : o.people.length > 1 ? `${o.people.length} eleitos` : o.official ? 'Eleito' : 'Matematicamente eleito';
   let body;
-  if (o.people.length > 2) {
-    body = `<div class="avs">${o.people.slice(0, 16).map(c => `<span title="${esc(nice(c.name))} (${esc(c.party)})">${photo(ph(c))}</span>`).join('')}</div><span class="more">Ver os ${o.people.length} eleitos →</span>`;
+  if (many) {
+    const all = !!S.resAll[tab];
+    const shown = all ? o.people : o.people.slice(0, PREVIEW);
+    body = `<div class="res-people">${shown.map(c => `<div class="res-mini">${photo(ph(c))}<div><b>${esc(nice(c.name))}</b>${partyBadge(c.party, area.proportional ? c.coalition : c.party)}<span class="v">${int(c.votes)} votos</span></div></div>`).join('')}</div>`
+      + (o.people.length > PREVIEW ? `<button type="button" class="res-all" data-tab="${tab}" aria-expanded="${all}">${all ? 'Mostrar menos' : `Ver todos os ${o.people.length} eleitos`}</button>` : '');
   } else if (o.kind === 'rr') {
-    body = o.people.map(c => resPerson(c, ph(c))).join('<div class="vs">×</div>');
+    body = `<div class="res-pair">${o.people.map(c => resPerson(c, ph(c))).join('<div class="vs">×</div>')}</div>`;
   } else {
-    body = o.people.map(c => resPerson(c, ph(c), c.official ? [c.official, 'st-el'] : null)).join('');
+    body = `<div class="res-pair">${o.people.map(c => resPerson(c, ph(c), c.official ? [c.official, 'st-el'] : null)).join('')}</div>`;
   }
-  return `<a class="res ${o.kind}" href="#${tab}"><div class="hd"><span>${head}</span><span class="tag">${tag}</span></div>${body}<div class="src">${src}</div></a>`;
+  return `<div class="res ${o.kind}"><div class="hd"><span>${head}</span><span class="tag">${tag}</span></div>${body}<div class="src">${src}</div></div>`;
 }
+// Only the active tab's result: Presidente on Presidente, Governador on Governador, etc.
 function renderResults() {
-  const n = S.snap.national, R = S.snap.races || {};
-  const items = [];
-  const o = n && outcome(n.candidates, n.defined, 1);
-  if (o) items.push(['presidente', 'Presidente · Brasil', n, o, presPhoto]);
-  for (const [k, head] of [['governador', 'Governador · SC'], ['senado', 'Senado · SC'], ['federal', 'Deputados federais · SC'], ['estadual', 'Deputados estaduais · SC']]) {
-    const r = R[k], ro = r && outcome(r.candidates, r.defined, r.seats);
-    if (ro) items.push([k, head, r, ro, c => racePhoto(r, c)]);
+  const tab = S.tab, n = S.snap.national, r = S.snap.races?.[tab];
+  let item = null;
+  if (tab === 'presidente') {
+    const o = n && outcome(n.candidates, n.defined, 1);
+    if (o) item = [tab, 'Presidente · Brasil', n, o, presPhoto];
+  } else if (r) {
+    const o = outcome(r.candidates, r.defined, r.seats);
+    const head = { governador: 'Governador · SC', senado: 'Senado · SC', federal: 'Deputados federais · SC', estadual: 'Deputados estaduais · SC' }[tab];
+    if (o) item = [tab, head, r, o, c => racePhoto(r, c)];
   }
-  const key = JSON.stringify(items.map(([k, , a, x]) => [k, x.kind, x.official, a.final, x.people.map(c => `${c.sq}:${c.votes}`)]));
+  const key = JSON.stringify(item && [tab, !!S.resAll[tab], item[3].kind, item[3].official, item[2].final, item[3].people.map(c => `${c.sq}:${c.votes}`)]);
   if (key === S.resKey) return;
   S.resKey = key;
   const box = $('results');
-  box.hidden = !items.length;
-  box.innerHTML = items.length ? `<h2>Resultados definidos</h2><div class="res-grid">${items.map(i => resCard(...i)).join('')}</div>` : '';
+  box.hidden = !item;
+  box.innerHTML = item ? `<h2>Resultado definido</h2>${resCard(...item)}` : '';
 }
+$('results').addEventListener('click', e => {
+  const b = e.target.closest('.res-all');
+  if (!b) return;
+  S.resAll[b.dataset.tab] = !S.resAll[b.dataset.tab];
+  renderResults();
+  if (!S.resAll[b.dataset.tab]) $('results').scrollIntoView({ block: 'nearest' });
+});
 
 // ---------- Data ----------
 // The server sends its build version with every snapshot (also on SSE reconnect after a deploy).
