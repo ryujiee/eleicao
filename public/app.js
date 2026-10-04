@@ -59,7 +59,7 @@ const partyBadge = (label, colourBy = label) => `<span class="party" ${pstyle(co
 // Official TSE candidate photos, served through our backend (/fotos/<eleição>/<uf|br>/<sq>.jpeg).
 const presPhoto = c => (c.sq && S.snap?.election?.code ? `/fotos/${S.snap.election.code}/br/${c.sq}.jpeg` : '');
 const racePhoto = (r, c) => (c.sq && r.election ? `/fotos/${r.election}/${r.uf.toLowerCase()}/${c.sq}.jpeg` : '');
-const photo = url => `<img class="ph" ${url ? `src="${url}"` : ''} alt="" loading="lazy" decoding="async" onerror="this.removeAttribute('src')">`;
+const photo = url => `<img class="ph" ${url ? `src="${url}"` : ''} alt="" loading="lazy" decoding="async" onerror="this.onerror=null;this.src='data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22/%3E'">`;
 
 const RACES = {
   governador: { title: 'GOVERNADOR — SANTA CATARINA', lead: 'Liderando', note: 'O destaque indica apenas quem lidera neste momento. A situação oficial (eleito ou 2º turno) só aparece quando definida pelo TSE.' },
@@ -203,7 +203,7 @@ function candRow(c, i, small) {
   const cls = partyCls(c.party);
   return `<div class="cand${small ? ' sm' : ''}">
     <span class="pos">${i + 1}º</span>${photo(presPhoto(c))}
-    <span class="nm">${esc(nice(c.name))}${partyBadge(c.party)}</span>
+    <span class="nm">${esc(nice(c.name))}${partyBadge(c.party)}${c.official ? `<span class="st ${c.elected ? 'st-el' : c.secondRound ? 'st-2t' : 'st-out'}">${esc(c.official)}</span>` : ''}</span>
     <span class="pc">${pct(c.pct)}</span>
     <span class="vt"><b>${int(c.votes)}</b> votos</span>
     <span class="meter"><i class="bg-${cls}" style="width:${Math.min(100, c.pct || 0)}%"></i></span>
@@ -313,6 +313,7 @@ function facts(a) {
 function render(first) {
   if (!S.snap || !S.els.AC) return;
   renderHeader();
+  renderResults();
   renderNational();
   for (const [uf] of UFS) renderUF(uf, first);
   renderCounts();
@@ -325,6 +326,7 @@ function render(first) {
 function badges(c, r, view) {
   let b = '';
   if (c.official) b += `<span class="st ${c.elected ? 'st-el' : /suplente/i.test(c.official) ? 'st-sup' : /turno/i.test(c.official) ? 'st-2t' : 'st-out'}">${esc(c.official)}</span>`;
+  else if (r.defined === 'e' && r.seats === 1 && c.rank === 1) b += '<span class="st st-el">Matematicamente eleito · TSE</span>';
   else if (c.entering) b += '<span class="st st-in">Entrando</span>';
   else if (c.inSeats && c.valid) b += `<span class="st st-lead">${esc(RACES[r.key]?.lead || 'Nas vagas (parcial)')}</span>`;
   else if (view === 'top' && r.proportional && !r.officialAvailable && c.rank <= r.seats && r.status !== 'waiting') b += '<span class="st st-off">Fora das vagas</span>';
@@ -439,6 +441,54 @@ function setTab(tab) {
     if (scrollY > top) scrollTo({ top });
   }
   if (S.snap) { renderHeader(); if (tab !== 'presidente') renderRace(); }
+}
+
+// ---------- Defined results (top of the page) ----------
+// Only the TSE decides: its official situação (st: "Eleito", "2º turno"...) or, for single-seat races, its
+// "matematicamente definido" flag (md: 'e' eleito / 's' 2º turno). Nothing here is inferred from vote counts.
+const RUNOFF_DATE = '25/10';
+function outcome(cands = [], defined, seats) {
+  if (cands.some(c => c.official)) {
+    const el = cands.filter(c => c.elected);
+    if (el.length) return { kind: 'el', people: el, official: true };
+    const rr = cands.filter(c => c.secondRound);
+    return rr.length ? { kind: 'rr', people: rr, official: true } : null;
+  }
+  if (seats === 1 && defined === 'e' && cands[0]?.votes) return { kind: 'el', people: [cands[0]], official: false };
+  if (seats === 1 && defined === 's' && cands[1]?.votes) return { kind: 'rr', people: cands.slice(0, 2), official: false };
+  return null;
+}
+function resPerson(c, url, label) {
+  return `<div class="res-p">${photo(url)}<div><b>${esc(nice(c.name))}</b>${partyBadge(c.party)}${label ? `<span class="st ${label[1]}">${esc(label[0])}</span>` : ''}<span class="v">${pct(c.pct)} · ${int(c.votes)} votos</span></div></div>`;
+}
+function resCard(tab, head, area, o, ph) {
+  const src = o.official ? (area.final ? 'Resultado oficial do TSE · totalização final' : 'Situação oficial do TSE') : 'Matematicamente definido pelo TSE · apuração em andamento';
+  const tag = o.kind === 'rr' ? `2º turno · ${RUNOFF_DATE}` : o.people.length > 1 ? `${o.people.length} eleitos` : o.official ? 'Eleito' : 'Matematicamente eleito';
+  let body;
+  if (o.people.length > 2) {
+    body = `<div class="avs">${o.people.slice(0, 16).map(c => `<span title="${esc(nice(c.name))} (${esc(c.party)})">${photo(ph(c))}</span>`).join('')}</div><span class="more">Ver os ${o.people.length} eleitos →</span>`;
+  } else if (o.kind === 'rr') {
+    body = o.people.map(c => resPerson(c, ph(c))).join('<div class="vs">×</div>');
+  } else {
+    body = o.people.map(c => resPerson(c, ph(c), c.official ? [c.official, 'st-el'] : null)).join('');
+  }
+  return `<a class="res ${o.kind}" href="#${tab}"><div class="hd"><span>${head}</span><span class="tag">${tag}</span></div>${body}<div class="src">${src}</div></a>`;
+}
+function renderResults() {
+  const n = S.snap.national, R = S.snap.races || {};
+  const items = [];
+  const o = n && outcome(n.candidates, n.defined, 1);
+  if (o) items.push(['presidente', 'Presidente · Brasil', n, o, presPhoto]);
+  for (const [k, head] of [['governador', 'Governador · SC'], ['senado', 'Senado · SC'], ['federal', 'Deputados federais · SC'], ['estadual', 'Deputados estaduais · SC']]) {
+    const r = R[k], ro = r && outcome(r.candidates, r.defined, r.seats);
+    if (ro) items.push([k, head, r, ro, c => racePhoto(r, c)]);
+  }
+  const key = JSON.stringify(items.map(([k, , a, x]) => [k, x.kind, x.official, a.final, x.people.map(c => `${c.sq}:${c.votes}`)]));
+  if (key === S.resKey) return;
+  S.resKey = key;
+  const box = $('results');
+  box.hidden = !items.length;
+  box.innerHTML = items.length ? `<h2>Resultados definidos</h2><div class="res-grid">${items.map(i => resCard(...i)).join('')}</div>` : '';
 }
 
 // ---------- Data ----------

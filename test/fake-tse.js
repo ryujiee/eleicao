@@ -58,9 +58,10 @@ export async function startFakeTse({ maxAge = 0 } = {}) {
     log,
     // New totalization for an area: rewrites its result file and its line in the ab status file.
     // lagRequests simulates the CDN serving the previous result file for N more requests.
-    publish(uf, votes, st, ht, { lagRequests = 0, touchAb = true } = {}) {
+    publish(uf, votes, st, ht, { lagRequests = 0, touchAb = true, patch } = {}) {
       const old = files[uf];
       files[uf] = makeU(uf, votes, { st, ht });
+      patch?.(files[uf]);
       if (lagRequests) lag[uf] = { old, remaining: lagRequests };
       if (!touchAb) return;
       const a = ab.abr.find(x => x.cdabr === uf);

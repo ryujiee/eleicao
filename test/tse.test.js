@@ -131,3 +131,23 @@ test('race with no totalization: nobody entering or in seats', () => {
   assert.equal(empty.status, 'waiting');
   assert.equal(empty.candidates.length, 0);
 });
+
+test('runoff candidates (e=s, st=2º turno) are not "eleito"; md is passed through', () => {
+  const u = fx('sc-governador');
+  const cands = u.carg[0].agr.flatMap(a => a.par).flatMap(p => p.cand);
+  cands.forEach(c => { c.st = 'Não eleito'; c.e = 'n'; });
+  for (const n of ['22', '40']) Object.assign(cands.find(c => c.n === n), { st: '2º turno', e: 's' });
+  u.md = 's';
+  const r = normalizeRace('governador', 'SC', u);
+  assert.equal(r.defined, 's');
+  assert.deepEqual(r.candidates.filter(c => c.secondRound).map(c => c.number).sort(), ['22', '40']);
+  assert.ok(r.candidates.every(c => !c.elected));
+
+  const br = makeU('br', { 22: 600, 13: 400 }, { st: 10 });
+  br.md = 'e';
+  br.carg[0].agr.flatMap(a => a.par).flatMap(p => p.cand).find(c => c.n === '22').st = 'Eleito';
+  const n = normalizeArea('BR', br);
+  assert.equal(n.defined, 'e');
+  assert.equal(n.candidates[0].elected, true);
+  assert.equal(n.candidates[1].official, undefined, 'no situação fields while the TSE leaves st empty');
+});
