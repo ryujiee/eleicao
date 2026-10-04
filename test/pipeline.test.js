@@ -56,13 +56,17 @@ test('live pipeline: detection, per-UF updates, leader changes, independence fro
   assert.equal(Object.keys(snap.states).length, 27);
   assert.deepEqual(counts(snap.states), { PT: 0, PL: 0, OTHER: 0, tie: 0, waiting: 27 });
   assert.equal(snap.national.status, 'waiting');
+  assert.deepEqual(Object.keys(snap.races), ['governador', 'senado', 'federal', 'estadual']);
+  assert.equal(snap.races.governador.candidates[0].name, 'JORGINHO MELLO');
+  assert.equal(snap.races.federal.candidates.filter(c => c.entering).length, 16);
+  assert.equal(snap.races.estadual.status, 'waiting');
 
   // Idle: only the ab status file and the national result are revalidated, never the 27 UF files.
   let mark = tse.log.length;
   await sleep(250);
   const idle = tse.log.slice(mark);
   assert.ok(idle.length >= 2);
-  const cheap = u => u.endsWith('-ab.json') || u.endsWith('/br/br-c0001-e006257-u.json');
+  const cheap = u => u.endsWith('-ab.json') || u.endsWith('/br/br-c0001-e006257-u.json') || u.includes('/6259/');
   assert.ok(idle.every(cheap), idle.join('\n'));
 
   mark = tse.log.length;
@@ -102,6 +106,19 @@ test('live pipeline: detection, per-UF updates, leader changes, independence fro
   assert.equal(up.national.leader, 'PL');
   assert.equal(up.states, undefined);
 
+  // A new totalization of a state race is pushed with only that race.
+  tse.publishRace('c0003', u => {
+    u.ht = '18:40:00';
+    u.s.st = String(Number(u.s.st) + 100);
+    const gelson = u.carg[0].agr.flatMap(a => a.par).flatMap(p => p.cand).find(c => c.n === '40');
+    gelson.vap = '999999';
+  });
+  up = await sse.next('update');
+  assert.deepEqual(Object.keys(up.races), ['governador']);
+  assert.equal(up.races.governador.candidates[0].name, 'GELSON MERÍSIO');
+  assert.equal(up.races.governador.candidates[0].inSeats, true);
+  assert.equal(up.races.governador.candidates[0].elected, false);
+
   const final = await (await fetch(`${url}/api/president`)).json();
   assert.deepEqual(counts(final.states), { PT: 1, PL: 1, OTHER: 1, tie: 1, waiting: 23 });
   assert.equal(final.states.SC.leader, 'PT', 'national result does not leak into states');
@@ -118,7 +135,7 @@ test('honours the TSE CDN max-age instead of re-polling a cached file', async t 
   t.after(() => { app.stop(); tse.close(); });
   await sleep(600);
   assert.equal(tse.log.filter(u => u.endsWith('-ab.json')).length, 1);
-  assert.equal(tse.log.length, 29, 'ab + 28 result files, each fetched once');
+  assert.equal(tse.log.length, 33, 'ab + 28 result files + 4 state races, each fetched once');
 });
 
 test('result file refreshed at CDN expiry even if the ab file is still cached', async t => {

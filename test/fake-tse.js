@@ -5,6 +5,7 @@ import { readFileSync } from 'node:fs';
 
 const abFixture = JSON.parse(readFileSync(new URL('./fixtures/ab.json', import.meta.url)));
 const uFixture = JSON.parse(readFileSync(new URL('./fixtures/u-sc.json', import.meta.url)));
+const fixture = name => JSON.parse(readFileSync(new URL(`./fixtures/${name}.json`, import.meta.url)));
 const br = n => String(n).replace('.', ',');
 
 // votes = { candidateNumber: votes }
@@ -33,6 +34,8 @@ export async function startFakeTse({ maxAge = 0 } = {}) {
   const lag = {};
   const log = [];
   for (const a of ab.abr) if (a.cdabr !== 'zz') files[a.cdabr] = makeU(a.cdabr);
+  // Real SC state-race files (eleição 6259) captured during the count; Deputado Estadual is left out (404).
+  const races = { c0003: fixture('sc-governador'), c0005: fixture('sc-senado'), c0006: fixture('sc-federal') };
 
   const server = http.createServer((req, res) => {
     log.push(req.url);
@@ -41,8 +44,8 @@ export async function startFakeTse({ maxAge = 0 } = {}) {
     else if ((m = req.url.match(/\/dados\/([a-z]{2})\/\1-c0001-e006257-u\.json$/)) && files[m[1]]) {
       const l = lag[m[1]];
       body = JSON.stringify(l && l.remaining-- > 0 ? l.old : files[m[1]]);
-    }
-    if (!body) { res.writeHead(404).end(); return; }
+    } else if ((m = req.url.match(/\/6259\/dados\/sc\/sc-(c\d{4})-e006259-u\.json$/)) && races[m[1]]) body = JSON.stringify(races[m[1]]);
+    if (!body) { res.writeHead(404, { 'cache-control': `max-age=${maxAge}` }).end(); return; }
     const etag = `"${createHash('md5').update(body).digest('hex')}"`;
     if (req.headers['if-none-match'] === etag) { res.writeHead(304).end(); return; }
     res.writeHead(200, { 'content-type': 'application/json', etag, 'cache-control': `max-age=${maxAge}` }).end(body);
@@ -63,6 +66,8 @@ export async function startFakeTse({ maxAge = 0 } = {}) {
       Object.assign(a, { dt: '04/10/2026', ht });
       a.s.st = String(st);
     },
+    // Mutate a state-race file in place, e.g. publishRace('c0003', u => { ... }).
+    publishRace(cargo, fn) { fn(races[cargo]); },
     close: () => server.close(),
   };
 }

@@ -3,7 +3,7 @@ import http from 'node:http';
 import { readFile } from 'node:fs/promises';
 import { extname, join, normalize } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { UFS, abKeys, emptyArea, normalizeArea } from './lib/tse.js';
+import { RACES, UFS, abKeys, emptyArea, normalizeArea, normalizeRace } from './lib/tse.js';
 
 const AREAS = ['BR', ...Object.keys(UFS)];
 const PUBLIC = fileURLToPath(new URL('./public/', import.meta.url));
@@ -20,6 +20,8 @@ export function createApp({
   ciclo = process.env.TSE_CICLO || 'ele2026',
   election = process.env.TSE_ELECTION || '6257', // 1º turno; 2º turno = 6258
   electionName = process.env.ELECTION_NAME || 'Eleição Ordinária Federal - 2026 1º Turno',
+  stateElection = process.env.TSE_STATE_ELECTION || '6259', // estadual 1º turno; 2º turno = 6260
+  stateUf = (process.env.STATE_UF || 'SC').toUpperCase(),
   pollMs = Number(process.env.POLL_MS) || 3_000, // TSE CDN serves the ab file with max-age=2; unchanged = 304
   fullRefreshMs = 60_000,
   heartbeatMs = 20_000,
@@ -29,10 +31,13 @@ export function createApp({
   const dados = `${base}/${ciclo}/${election}/dados`;
   const abUrl = `${dados}/br/br-e${e}-ab.json`;
   const uUrl = uf => `${dados}/${uf.toLowerCase()}/${uf.toLowerCase()}-c0001-e${e}-u.json`;
+  const su = stateUf.toLowerCase();
+  const raceUrl = key => `${base}/${ciclo}/${stateElection}/dados/${su}/${su}-${RACES[key].cargo}-e${stateElection.padStart(6, '0')}-u.json`;
 
   const national = emptyArea('BR');
   const states = Object.fromEntries(Object.keys(UFS).map(uf => [uf, emptyArea(uf)]));
   const area = uf => (uf === 'BR' ? national : states[uf]);
+  const races = Object.fromEntries(Object.keys(RACES).map(k => [k, normalizeRace(k, stateUf, {})]));
   const etags = new Map();
   const freshUntil = new Map(); // url -> ms; the TSE CDN cannot return anything newer before its max-age expires
   const seen = {};   // uf -> ab key already reflected in our cached data
@@ -92,15 +97,30 @@ export function createApp({
         log('area', uf, err.message);
       }
     });
+    // State races: 4 files, each revalidated when its CDN max-age expires (304 when unchanged).
+    const changedRaces = {};
+    await mapLimit(Object.keys(RACES), 2, async key => {
+      try {
+        const u = await get(raceUrl(key));
+        if (!u) return;
+        const next = normalizeRace(key, stateUf, u);
+        if (next.sections.counted < races[key].sections.counted) return; // stale CDN edge
+        if (JSON.stringify(next) === JSON.stringify(races[key])) return;
+        races[key] = changedRaces[key] = next;
+      } catch (err) {
+        log('race', key, err.message);
+      }
+    });
     checkedAt = new Date().toISOString();
     snapshotJson = null;
-    const keys = Object.keys(changed);
+    const keys = [...Object.keys(changed), ...Object.keys(changedRaces)];
     if (keys.length) {
       updatedAt = checkedAt;
       const { BR, ...ufs } = changed;
       const msg = { updatedAt, checkedAt };
       if (BR) msg.national = BR;
       if (Object.keys(ufs).length) msg.states = ufs;
+      if (Object.keys(changedRaces).length) msg.races = changedRaces;
       send(`event: update\ndata: ${JSON.stringify(msg)}\n\n`);
       log('changed', keys.join(','));
     }
@@ -113,7 +133,7 @@ export function createApp({
   }
 
   const snapshot = () => (snapshotJson ??= JSON.stringify({
-    election: { code: election, name: electionName, cargo: 'Presidente' }, updatedAt, checkedAt, national, states,
+    election: { code: election, name: electionName, cargo: 'Presidente' }, updatedAt, checkedAt, national, states, races,
   }));
   const send = frame => { for (const res of clients) res.write(frame); };
   // Heartbeat doubles as keep-alive and "verificado às" refresh for the page.
@@ -153,7 +173,7 @@ export function createApp({
   });
 
   return {
-    server, stats, national, states,
+    server, stats, national, states, races,
     listen(port, host) {
       loop();
       return new Promise(r => server.listen(port, host, () => r(server.address().port)));

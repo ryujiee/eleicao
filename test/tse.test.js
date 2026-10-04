@@ -1,10 +1,11 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
-import { UFS, abKeys, leaderGroup, normalizeArea, toBrasilia } from '../lib/tse.js';
+import { UFS, abKeys, leaderGroup, normalizeArea, normalizeRace, toBrasilia } from '../lib/tse.js';
 import { makeU } from './fake-tse.js';
 
 const ab = JSON.parse(readFileSync(new URL('./fixtures/ab.json', import.meta.url)));
+const fx = name => JSON.parse(readFileSync(new URL(`./fixtures/${name}.json`, import.meta.url)));
 const zeroed = JSON.parse(readFileSync(new URL('./fixtures/u-sc.json', import.meta.url)));
 
 test('real zeroed TSE file = waiting, no leader', () => {
@@ -68,4 +69,65 @@ test('map has exactly the 27 UF paths with matching ids', () => {
   assert.equal(paths.length, 27);
   for (const [, id, uf] of paths) assert.equal(id, uf);
   assert.deepEqual(paths.map(p => p[1]).sort(), Object.keys(UFS).sort());
+});
+
+test('Deputado Federal SC (real partial file): entering follows the TSE seat distribution, not the top 16', () => {
+  const r = normalizeRace('federal', 'SC', fx('sc-federal'));
+  assert.equal(r.seats, 16);
+  assert.equal(r.proportional, true);
+  assert.equal(r.officialAvailable, false);
+  assert.ok(r.qe > 0);
+  const entering = r.candidates.filter(c => c.entering);
+  assert.equal(entering.length, 16);
+  assert.equal(r.parties.reduce((a, p) => a + p.seats, 0), 16);
+  // Each agremiação gets exactly its TSE seats, filled by its own most voted candidates.
+  for (const p of r.parties) {
+    const list = r.candidates.filter(c => c.coalition === p.name && c.valid);
+    assert.equal(list.filter(c => c.entering).length, p.seats, p.name);
+    assert.ok(list.slice(0, p.seats).every(c => c.entering), p.name);
+  }
+  const top16 = r.candidates.slice(0, 16);
+  assert.ok(top16.some(c => !c.entering), 'someone in the overall top 16 is outside');
+  assert.ok(entering.some(c => c.rank > 16), 'someone below the top 16 is in via the list');
+  assert.ok(r.candidates.every(c => !c.elected && !c.inSeats));
+  assert.ok(r.candidates.some(c => !c.valid), 'sub judice candidates flagged');
+  assert.ok(r.candidates.filter(c => !c.valid).every(c => !c.entering));
+});
+
+test('Governador / Senado SC: highlight seats, never elected without TSE', () => {
+  const g = normalizeRace('governador', 'SC', fx('sc-governador'));
+  assert.equal(g.seats, 1);
+  assert.deepEqual(g.candidates.filter(c => c.inSeats).map(c => c.name), ['JORGINHO MELLO']);
+  assert.equal(g.margin, g.candidates[0].votes - g.candidates[1].votes);
+  assert.ok(g.candidates.every(c => !c.elected && !c.entering));
+  assert.ok(g.sections.pct > 0 && g.status === 'counting');
+
+  const s = normalizeRace('senado', 'SC', fx('sc-senado'));
+  assert.equal(s.seats, 2);
+  assert.deepEqual(s.candidates.filter(c => c.inSeats).map(c => c.rank), [1, 2]);
+  assert.ok(s.candidates.every(c => !c.elected));
+});
+
+test('official TSE situação replaces the projection', () => {
+  const u = fx('sc-federal');
+  const cands = u.carg[0].agr.flatMap(a => a.par).flatMap(p => p.cand);
+  cands.forEach(c => { c.st = 'Não eleito'; c.e = 'n'; });
+  Object.assign(cands.at(-1), { st: 'Eleito por média', e: 's' });
+  const r = normalizeRace('federal', 'SC', u);
+  assert.equal(r.officialAvailable, true);
+  assert.ok(r.candidates.every(c => !c.entering));
+  assert.equal(r.candidates.filter(c => c.elected).length, 1);
+  assert.equal(r.candidates.find(c => c.elected).official, 'Eleito por média');
+});
+
+test('race with no totalization: nobody entering or in seats', () => {
+  const u = fx('sc-federal');
+  u.s.st = '0';
+  u.carg[0].agr.forEach(a => { a.vag = '0'; a.par.forEach(p => p.cand.forEach(c => (c.vap = '0'))); });
+  const r = normalizeRace('federal', 'SC', u);
+  assert.equal(r.status, 'waiting');
+  assert.ok(r.candidates.every(c => !c.entering && !c.inSeats));
+  const empty = normalizeRace('governador', 'SC', {});
+  assert.equal(empty.status, 'waiting');
+  assert.equal(empty.candidates.length, 0);
 });
