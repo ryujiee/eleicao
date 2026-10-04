@@ -74,7 +74,7 @@ const S = { snap: null, sel: null, keys: {}, natKey: '', selKey: '', els: {}, ta
 // ---------- Map ----------
 async function loadMap() {
   const host = $('map');
-  host.innerHTML = await (await fetch('brasil.svg')).text();
+  host.innerHTML = await (await fetch(`brasil.svg?v=${VERSION}`)).text();
   const svg = host.querySelector('svg');
   const NS = 'http://www.w3.org/2000/svg';
   const el = (tag, attrs, parent) => {
@@ -442,7 +442,22 @@ function setTab(tab) {
 }
 
 // ---------- Data ----------
+// The server sends its build version with every snapshot (also on SSE reconnect after a deploy).
+// A page running older code shows a big banner and reloads itself.
+const VERSION = document.querySelector('meta[name="version"]')?.content || '';
+let reloading = false;
+function checkVersion(v) {
+  if (!v || !VERSION || VERSION === '__V__' || v === VERSION || reloading) return;
+  reloading = true;
+  const btn = $('update');
+  btn.hidden = false;
+  btn.onclick = () => location.reload();
+  let n = 5;
+  const tick = () => { $('update-count').textContent = `Atualizando automaticamente em ${n}s…`; if (n-- <= 0) location.reload(); else setTimeout(tick, 1000); };
+  tick();
+}
 function applySnapshot(s) {
+  checkVersion(s.version);
   const first = !S.snap;
   S.snap = s;
   render(first);

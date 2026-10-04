@@ -134,6 +134,14 @@ test('live pipeline: detection, per-UF updates, leader changes, independence fro
   assert.equal((await fetch(`${url}/fotos/9999/sc/240002551001.jpeg`)).status, 404);
   assert.equal((await fetch(`${url}/fotos/6259/sc/..%2F..%2Fdados.jpeg`)).status, 404);
 
+  // Versioned assets: the page references this build's version and the snapshot carries it for auto-reload.
+  const html = await (await fetch(`${url}/`)).text();
+  assert.equal(final.version, app.version);
+  assert.ok(html.includes(`app.js?v=${app.version}`) && html.includes(`style.css?v=${app.version}`));
+  assert.ok(!html.includes('__V__'));
+  const css = await fetch(`${url}/style.css?v=${app.version}`);
+  assert.match(css.headers.get('cache-control'), /immutable/);
+
   const health = await (await fetch(`${url}/healthz`)).json();
   assert.equal(health.ok, true);
 });

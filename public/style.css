@@ -247,3 +247,9 @@ a { color: inherit; }
 
 .rest li .ph { width: 32px; height: 32px; }
 .row .ph { width: 38px; height: 38px; }
+
+/* Outdated-version banner (shown when the server was redeployed) */
+.update { position: fixed; inset: auto 12px 16px; z-index: 100; display: flex; flex-direction: column; gap: 6px; align-items: center; max-width: 560px; margin: 0 auto; padding: 22px 20px; border: 0; border-radius: 18px; background: #f5c542; color: #111827; font: inherit; font-size: 18px; font-weight: 700; text-align: center; box-shadow: 0 20px 60px rgba(0,0,0,.6); cursor: pointer; }
+.update[hidden] { display: none; }
+.update b { font-size: 22px; text-decoration: underline; }
+.update small { font-size: 13px; font-weight: 600; opacity: .8; }

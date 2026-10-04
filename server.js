@@ -1,6 +1,8 @@
 // Zero-dependency backend: polls TSE once, caches, and fans out to browsers via SSE.
 import http from 'node:http';
 import { readFile } from 'node:fs/promises';
+import { readFileSync } from 'node:fs';
+import { createHash } from 'node:crypto';
 import { extname, join, normalize } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { RACES, UFS, abKeys, emptyArea, normalizeArea, normalizeRace } from './lib/tse.js';
@@ -45,6 +47,11 @@ export function createApp({
   let wanted = {};   // uf -> latest ab key ("dt ht seçõesTotalizadas")
   let lastFull = 0, updatedAt = new Date().toISOString(), checkedAt = null, lastError = null, snapshotJson = null;
   let timer, delay = pollMs;
+  // Build version = hash of the frontend files. Assets get ?v=<version> so Cloudflare/browser caches (CF forces
+  // 4h on css/js) never mix versions; open pages compare it with snapshot.version and reload after a deploy.
+  const files = ['index.html', 'app.js', 'style.css', 'brasil.svg'].map(f => readFileSync(join(PUBLIC, f)));
+  const version = createHash('sha1').update(Buffer.concat(files)).digest('hex').slice(0, 10);
+  const indexHtml = files[0].toString().replaceAll('__V__', version);
   const clients = new Set();
   const stats = { requests: 0, notModified: 0, urls: [] };
 
@@ -133,7 +140,7 @@ export function createApp({
   }
 
   const snapshot = () => (snapshotJson ??= JSON.stringify({
-    election: { code: election, name: electionName, cargo: 'Presidente' }, updatedAt, checkedAt, national, states, races,
+    version, election: { code: election, name: electionName, cargo: 'Presidente' }, updatedAt, checkedAt, national, states, races,
   }));
   const send = frame => { for (const res of clients) res.write(frame); };
   // Heartbeat doubles as keep-alive and "verificado às" refresh for the page.
@@ -175,11 +182,17 @@ export function createApp({
       return;
     }
 
-    const file = join(PUBLIC, normalize(path === '/' ? '/index.html' : path));
+    if (path === '/' || path === '/index.html') {
+      res.writeHead(200, { 'content-type': TYPES['.html'], 'cache-control': 'no-cache' });
+      res.end(req.method === 'HEAD' ? undefined : indexHtml);
+      return;
+    }
+    const file = join(PUBLIC, normalize(path));
     if (!file.startsWith(PUBLIC)) { res.writeHead(404).end(); return; }
     try {
       const body = await readFile(file);
-      res.writeHead(200, { 'content-type': TYPES[extname(file)] || 'application/octet-stream', 'cache-control': 'public, max-age=60' });
+      const versioned = new URL(req.url, 'http://x').searchParams.get('v') === version;
+      res.writeHead(200, { 'content-type': TYPES[extname(file)] || 'application/octet-stream', 'cache-control': versioned ? 'public, max-age=31536000, immutable' : 'public, max-age=60' });
       res.end(req.method === 'HEAD' ? undefined : body);
     } catch {
       res.writeHead(404).end('not found');
@@ -187,9 +200,9 @@ export function createApp({
   });
 
   return {
-    server, stats, national, states, races,
-    listen(port, host) {
-      loop();
+    server, stats, national, states, races, version,
+    async listen(port, host) {
+      await loop(); // first TSE poll before accepting clients: a restart never serves an empty snapshot
       return new Promise(r => server.listen(port, host, () => r(server.address().port)));
     },
     stop() {

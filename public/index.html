@@ -6,9 +6,10 @@
 <title>Eleições 2026 — Apuração ao vivo: Presidente e Santa Catarina</title>
 <meta name="description" content="Apuração em tempo real das eleições de 2026 com dados oficiais do TSE: Presidente (com mapa de quem lidera em cada estado), Governador, Senado, Deputados Federais e Estaduais de Santa Catarina.">
 <meta name="theme-color" content="#0a0f1c">
-<link rel="stylesheet" href="style.css">
-<link rel="preload" href="brasil.svg" as="fetch" crossorigin>
-<script type="module" src="app.js"></script>
+<meta name="version" content="__V__">
+<link rel="stylesheet" href="style.css?v=__V__">
+<link rel="preload" href="brasil.svg?v=__V__" as="fetch" crossorigin>
+<script type="module" src="app.js?v=__V__"></script>
 </head>
 <body>
 <header class="top">
@@ -78,5 +79,6 @@
 <footer class="foot">
   Dados oficiais de divulgação do <a href="https://resultados.tse.jus.br" rel="noopener">TSE</a> · Malha territorial do <a href="https://servicodados.ibge.gov.br/api/docs/malhas?versao=3" rel="noopener">IBGE</a> · Projeto open source: <a href="https://github.com/ryujiee/eleicao" rel="noopener">github.com/ryujiee/eleicao</a>
 </footer>
+<button id="update" class="update" type="button" hidden>Você está em uma versão desatualizada.<b>Toque aqui para atualizar</b><small id="update-count"></small></button>
 </body>
 </html>

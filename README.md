@@ -73,6 +73,10 @@ apenas com as áreas alteradas), `GET /healthz`.
 git -C /opt/eleicao pull && systemctl restart eleicao
 ```
 
+O reinício é necessário: a versão do frontend (hash dos arquivos de `public/`) é calculada na
+inicialização. Os assets são servidos como `app.js?v=<versão>` (cache imutável), e as páginas já
+abertas recebem a nova versão pela conexão ao vivo, mostram um aviso e recarregam sozinhas.
+
 Arquivos de referência em `deploy/` (unit do systemd e site do nginx com SSE sem buffer).
 
 ## Licença
