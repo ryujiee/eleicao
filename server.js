@@ -73,7 +73,9 @@ export function createApp({
     if (ab) wanted = abKeys(ab);
     const full = Date.now() - lastFull > fullRefreshMs; // safety net in case ab lags; unchanged files answer 304
     if (full) lastFull = Date.now();
-    const dirty = AREAS.filter(uf => uf === 'BR' || full || !(uf in seen) || (wanted[uf] !== undefined && wanted[uf] !== seen[uf]));
+    // Files served with a CDN max-age are revalidated as soon as it expires (get() skips them until then):
+    // ab and each result file have independent ~60s CDN cycles, so waiting for ab would add up to 2 delays.
+    const dirty = AREAS.filter(uf => uf === 'BR' || full || freshUntil.has(uUrl(uf)) || !(uf in seen) || (wanted[uf] !== undefined && wanted[uf] !== seen[uf]));
     const changed = {};
     await mapLimit(dirty, 4, async uf => {
       try {

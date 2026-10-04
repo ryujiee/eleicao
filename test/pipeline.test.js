@@ -120,3 +120,16 @@ test('honours the TSE CDN max-age instead of re-polling a cached file', async t 
   assert.equal(tse.log.filter(u => u.endsWith('-ab.json')).length, 1);
   assert.equal(tse.log.length, 29, 'ab + 28 result files, each fetched once');
 });
+
+test('result file refreshed at CDN expiry even if the ab file is still cached', async t => {
+  const tse = await startFakeTse({ maxAge: 2 });
+  const app = createApp({ base: tse.base, pollMs: 40, heartbeatMs: 60_000, log: () => {} });
+  const port = await app.listen(0, '127.0.0.1');
+  t.after(() => { app.stop(); tse.close(); });
+  await sleep(300);
+  const sse = await openSse(`http://127.0.0.1:${port}/api/stream`);
+  await sse.next('snapshot');
+  tse.publish('sc', { 22: 10, 13: 20 }, 1, '17:50:00', { touchAb: false });
+  const up = await sse.next('update', 4000);
+  assert.equal(up.states.SC.leader, 'PT');
+});

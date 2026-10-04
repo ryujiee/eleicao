@@ -22,18 +22,20 @@ Estrutura descoberta em `https://resultados.tse.jus.br/oficial/comum/config/ele-
 | `ele2026/6257/dados/br/br-e006257-ab.json` | Um único arquivo com o andamento de todas as UFs (data/hora da última totalização e seções totalizadas). |
 | `ele2026/6257/dados/<uf>/<uf>-c0001-e006257-u.json` | Resultado presidencial de uma UF (ou `br` para o nacional). |
 
-A cada 3 segundos o backend faz **uma** requisição condicional (`If-None-Match`) ao arquivo `ab`
-(a CDN do TSE o publica com `max-age=2`; sem mudança, a resposta é `304` vazia). Só as UFs cuja
-linha mudou têm o arquivo de resultado baixado. Se a CDN ainda servir uma versão anterior do
-arquivo da UF, o backend tenta de novo nos ciclos seguintes. O resultado nacional também é
-revalidado em todo ciclo e, a cada 60 segundos, todos os arquivos passam por uma revalidação de
-segurança (também condicional, `304` quando nada mudou). O navegador nunca acessa o TSE: tudo
-fica em cache no backend e é distribuído aos clientes por SSE.
+A cada 3 segundos o backend verifica quais arquivos podem ter novidade, sempre com requisições
+condicionais (`If-None-Match`; sem mudança, a resposta é `304` vazia):
 
-A CDN do TSE mantém cada arquivo em cache por até ~60 s e informa o tempo restante em `max-age`;
-o backend respeita esse valor (não adianta perguntar antes: a CDN não teria nada mais novo), o que
-mantém o volume de requisições baixo sem perder atualidade. Os horários do TSE vêm no fuso local
-de cada UF (AC = UTC-5; AM, RR, RO, MT, MS = UTC-4) e são exibidos no horário de Brasília.
+- o arquivo `ab` indica quais UFs tiveram nova totalização; só essas têm o resultado consultado;
+- a CDN do TSE mantém cada arquivo em cache por até ~60 s e informa o tempo restante em `max-age`.
+  O backend não pergunta antes disso (a CDN não teria nada mais novo) e revalida cada arquivo assim
+  que o cache dele expira. Como `ab` e os arquivos das UFs têm ciclos de cache independentes, isso
+  evita somar dois atrasos: cada UF chega no máximo um ciclo de CDN depois da publicação do TSE.
+
+Na prática são ~0,5 requisição por segundo, quase todas `304`. O navegador nunca acessa o TSE:
+tudo fica em cache no backend e é distribuído aos clientes por SSE no instante em que muda.
+
+Os horários do TSE vêm no fuso local de cada UF (AC = UTC-5; AM, RR, RO, MT, MS = UTC-4) e são
+exibidos no horário de Brasília.
 
 A cor de cada UF vem da sigla do partido do candidato (`par.sg` no arquivo do TSE), nunca do nome.
 UF sem seção totalizada ou sem votos não é atribuída a ninguém; empate no 1º lugar não escolhe lado.
