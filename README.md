@@ -18,6 +18,28 @@ Produção: https://eleicao.infinitytech.net.br
   publica a situação oficial (`st`/`e`), ela substitui a projeção. Nada é chamado de "eleito" antes disso.
 - Atualização ao vivo via Server-Sent Events; só os estados que mudaram são redesenhados.
 
+## Apuração encerrada
+
+A interface só mostra "100% · APURAÇÃO ENCERRADA" quando o próprio TSE sinaliza: `tf = "s"`
+(totalização final) ou `md = "e"`/`"s"` (resultado matematicamente definido: eleito / 2º turno).
+Nunca a partir do percentual. O dado bruto continua intacto na API e visível nos detalhes
+("Totalização oficial recebida: 99,97% (499.120 / 499.248 seções)"). Com o cargo encerrado, o selo
+"● AO VIVO" vira "✓ RESULTADO FINAL" e o painel segue como registro histórico.
+
+## 2º turno — análise de cenários
+
+Aba "2º turno" com os finalistas definidos pelo TSE (situação oficial ou `md = "s"`), votos finais
+do 1º turno, votos disponíveis dos demais candidatos, simulador de transferência (por candidato
+eliminado, troca entre finalistas, branco/nulo/abstenção e novos votos válidos), presets
+matemáticos (Transferência neutra, Repetir 1º turno, Personalizado) e mapa simulado por UF, que
+aplica as mesmas premissas sobre o resultado real de cada UF. Tudo é rotulado como
+"Cenário simulado — não é previsão". As contas ficam em `public/sim.js` (testadas em `test/sim.test.js`).
+
+Pesquisas: `data/polls.json` (servido em `/api/polls`). A integração está desabilitada porque não há
+fonte oficial automatizável com os números (o PesqEle do TSE publica registro, instituto e período,
+mas não os resultados). Só devem entrar levantamentos identificáveis e registrados, com instituto,
+período de campo, divulgação, margem de erro, registro no TSE e link da fonte. Nunca médias.
+
 ## Como os dados do TSE são consumidos
 
 Estrutura descoberta em `https://resultados.tse.jus.br/oficial/comum/config/ele-c.json`

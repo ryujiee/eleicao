@@ -142,6 +142,10 @@ test('live pipeline: detection, per-UF updates, leader changes, independence fro
   const css = await fetch(`${url}/style.css?v=${app.version}`);
   assert.match(css.headers.get('cache-control'), /immutable/);
 
+  const polls = await (await fetch(`${url}/api/polls`)).json();
+  assert.equal(polls.enabled, false);
+  assert.deepEqual([polls.runoff, polls.firstRound], [[], []]);
+
   const health = await (await fetch(`${url}/healthz`)).json();
   assert.equal(health.ok, true);
 });

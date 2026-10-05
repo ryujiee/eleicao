@@ -67,14 +67,16 @@ const RACES = {
   federal: { title: 'DEPUTADOS FEDERAIS — SANTA CATARINA' },
   estadual: { title: 'DEPUTADOS ESTADUAIS — SANTA CATARINA' },
 };
-const TABS = ['presidente', ...Object.keys(RACES)];
+const TABS = ['presidente', 'segundo-turno', ...Object.keys(RACES)];
 
+let runoff = null; // 2º turno module (segundo.js), loaded after the map
 const S = { snap: null, sel: null, keys: {}, natKey: '', selKey: '', els: {}, tab: 'presidente', raceKey: '', listKey: '', filter: {}, query: '', resKey: '', resAll: {} };
 
 // ---------- Map ----------
 async function loadMap() {
   const host = $('map');
-  host.innerHTML = await (await fetch(`brasil.svg?v=${VERSION}`)).text();
+  S.svgText = await (await fetch(`brasil.svg?v=${VERSION}`)).text();
+  host.innerHTML = S.svgText;
   const svg = host.querySelector('svg');
   const NS = 'http://www.w3.org/2000/svg';
   const el = (tag, attrs, parent) => {
@@ -210,16 +212,40 @@ function candRow(c, i, small) {
   </div>`;
 }
 
+// Area shown in the header for the active tab (2º turno tab = final 1st-round national result).
+const headerArea = () => (RACES[S.tab] ? S.snap?.races?.[S.tab] : S.snap?.national);
 function renderHeader() {
-  const race = S.tab !== 'presidente';
-  const n = race ? S.snap.races?.[S.tab] : S.snap.national;
-  $('apur-scope').textContent = race ? 'Santa Catarina' : 'Brasil';
+  const race = !!RACES[S.tab];
+  const n = headerArea();
+  $('apur-scope').textContent = race ? 'Santa Catarina' : S.tab === 'segundo-turno' ? 'Brasil · 1º turno' : 'Brasil';
+  renderBadge();
   if (!n) { $('nat-pct').textContent = '–'; $('nat-bar').style.width = '0'; $('meta').textContent = 'Aguardando dados deste cargo…'; return; }
-  $('nat-pct').textContent = pct(n.sections.pct);
-  $('nat-bar').style.width = `${Math.min(100, n.sections.pct || 0)}%`;
   const tse = n.ht ? `Última totalização do TSE: ${esc(n.ht)}${n.dt ? ` (${esc(n.dt)})` : ''}` : 'Aguardando primeira totalização do TSE';
   const check = S.snap.checkedAt ? ` · verificado às ${clock(S.snap.checkedAt)}` : '';
+  // "Apuração encerrada" only from TSE flags (closure: tf='s' final / md='e'|'s' defined), never from the %.
+  // The raw TSE percentage and sections stay visible in the details line.
+  if (n.closure) {
+    $('nat-pct').textContent = '100%';
+    $('apur-label').textContent = 'apuração encerrada';
+    $('nat-bar').style.width = '100%';
+    const why = n.closure === 'final' ? 'Totalização final do TSE' : `Resultado matematicamente definido pelo TSE${n.defined === 's' ? ' (2º turno)' : n.defined === 'e' ? ' (eleito)' : ''}`;
+    $('meta').innerHTML = `<b>${why}</b> · Totalização oficial recebida: ${pct(n.sections.pct)} (${int(n.sections.counted)} / ${int(n.sections.total)} seções) · ${tse}${check}`;
+    return;
+  }
+  $('nat-pct').textContent = pct(n.sections.pct);
+  $('apur-label').textContent = 'apurado';
+  $('nat-bar').style.width = `${Math.min(100, n.sections.pct || 0)}%`;
   $('meta').innerHTML = `${n.final ? '<b>Totalização final</b> · ' : ''}${tse}${check}`;
+}
+function renderBadge() {
+  const live = $('live'), n = headerArea();
+  if (n?.closure) {
+    live.className = 'live final';
+    live.textContent = S.tab === 'segundo-turno' ? '✓ 1º TURNO ENCERRADO' : '✓ RESULTADO FINAL';
+  } else {
+    live.className = `live ${S.online ? 'on' : 'off'}`;
+    live.textContent = S.online ? '● AO VIVO' : '● RECONECTANDO…';
+  }
 }
 
 function renderNational() {
@@ -319,7 +345,8 @@ function render(first) {
   renderCounts();
   renderState();
   renderPctLabels();
-  if (S.tab !== 'presidente') renderRace();
+  if (RACES[S.tab]) renderRace();
+  runoff?.updateRunoff(S.snap, S.tab === 'segundo-turno');
 }
 
 // ---------- Santa Catarina races ----------
@@ -433,14 +460,16 @@ function setTab(tab) {
     if (on && changed) a.scrollIntoView({ block: 'nearest', inline: 'nearest' });
   }
   $('panel-presidente').hidden = tab !== 'presidente';
-  $('panel-race').hidden = tab === 'presidente';
+  $('panel-race').hidden = !RACES[tab];
+  $('panel-runoff').hidden = tab !== 'segundo-turno';
   if (changed) {
     S.raceKey = S.listKey = '';
     $('race-search').value = S.query = '';
     const top = $('tabs').offsetTop;
     if (scrollY > top) scrollTo({ top });
   }
-  if (S.snap) { renderHeader(); renderResults(); if (tab !== 'presidente') renderRace(); }
+  if (S.snap) { renderHeader(); renderResults(); if (RACES[tab]) renderRace(); }
+  runoff?.updateRunoff(S.snap, tab === 'segundo-turno');
 }
 
 // ---------- Defined results (top of the page) ----------
@@ -477,7 +506,8 @@ function resCard(tab, head, area, o, ph) {
   } else {
     body = `<div class="res-pair">${o.people.map(c => resPerson(c, ph(c), c.official ? [c.official, 'st-el'] : null)).join('')}</div>`;
   }
-  return `<div class="res ${o.kind}"><div class="hd"><span>${head}</span><span class="tag">${tag}</span></div>${body}<div class="src">${src}</div></div>`;
+  const cta = tab === 'presidente' && o.kind === 'rr' ? '<a class="res-all res-cta" href="#segundo-turno">Abrir análise do 2º turno →</a>' : '';
+  return `<div class="res ${o.kind}"><div class="hd"><span>${head}</span><span class="tag">${tag}</span></div>${body}${cta}<div class="src">${src}</div></div>`;
 }
 // Only the active tab's result: Presidente on Presidente, Governador on Governador, etc.
 function renderResults() {
@@ -540,9 +570,8 @@ async function fetchSnapshot() {
   try { applySnapshot(await (await fetch('/api/president', { cache: 'no-store' })).json()); } catch {}
 }
 function setLive(on) {
-  const live = $('live');
-  live.className = `live ${on ? 'on' : 'off'}`;
-  live.textContent = on ? '● AO VIVO' : '● RECONECTANDO…';
+  S.online = on;
+  renderBadge();
 }
 let es;
 function connect() {
@@ -567,6 +596,10 @@ $('race-search').addEventListener('input', e => { S.query = e.target.value; rend
 addEventListener('hashchange', route);
 renderState();
 await loadMap();
+// 2º turno analysis lives in its own module; a failure there must never break the main dashboard.
+import(`./segundo.js?v=${VERSION}`)
+  .then(m => { m.mountRunoff($('panel-runoff'), { svgText: S.svgText, photo: presPhoto, partyColor }); runoff = m; if (S.snap) m.updateRunoff(S.snap, S.tab === 'segundo-turno'); })
+  .catch(err => console.error('2º turno indisponível', err));
 route();
 fetchSnapshot().then(route);
 connect();

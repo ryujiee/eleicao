@@ -1,0 +1,6 @@
+{
+  "enabled": false,
+  "note": "Integração desabilitada: não há fonte oficial e automatizável com os números das pesquisas. O TSE (PesqEle) publica registro, instituto e período, mas não os resultados. Só entram aqui levantamentos identificáveis e registrados, curados manualmente com fonte.",
+  "runoff": [],
+  "firstRound": []
+}

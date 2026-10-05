@@ -285,3 +285,5 @@ a { color: inherit; }
 .res-mini .v { margin-left: 6px; color: var(--muted); font-size: 12.5px; }
 .res-all { display: block; width: 100%; margin-top: 12px; padding: 14px; border: 0; border-radius: 12px; background: #f5c542; color: #1b1404; font: inherit; font-size: 16px; font-weight: 800; cursor: pointer; }
 .res-all[aria-expanded="true"] { background: rgba(245,197,66,.18); color: #f5c542; }
+.live.final { background: rgba(74,222,128,.14); color: #4ade80; }
+.res-cta { text-align: center; text-decoration: none; }

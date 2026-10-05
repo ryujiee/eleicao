@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
-import { UFS, abKeys, leaderGroup, normalizeArea, normalizeRace, toBrasilia } from '../lib/tse.js';
+import { UFS, abKeys, closure, leaderGroup, normalizeArea, normalizeRace, toBrasilia } from '../lib/tse.js';
 import { makeU } from './fake-tse.js';
 
 const ab = JSON.parse(readFileSync(new URL('./fixtures/ab.json', import.meta.url)));
@@ -150,4 +150,22 @@ test('runoff candidates (e=s, st=2º turno) are not "eleito"; md is passed throu
   assert.equal(n.defined, 'e');
   assert.equal(n.candidates[0].elected, true);
   assert.equal(n.candidates[1].official, undefined, 'no situação fields while the TSE leaves st empty');
+});
+
+test('apuração encerrada only from TSE flags; raw percentage untouched', () => {
+  assert.equal(closure({ tf: 's' }), 'final');
+  assert.equal(closure({ tf: 'n', md: 's' }), 'defined');
+  assert.equal(closure({ tf: 'n', md: 'e' }), 'defined');
+  assert.equal(closure({ tf: 'n', md: 'n' }), null);
+  assert.equal(closure({ tf: 'n' }), null, '99,9% without a TSE flag is still counting');
+  const u = makeU('br', { 22: 56098518, 13: 53846638 }, { st: 499077 });
+  u.s.ts = '499248'; u.s.pstn = '99,965748486'; u.md = 's'; u.tf = 'n';
+  u.e = { a: '33458767', te: '158745502' };
+  const n = normalizeArea('BR', u);
+  assert.equal(n.closure, 'defined');
+  assert.equal(n.sections.pct, 99.965748486);
+  assert.deepEqual([n.sections.counted, n.sections.total], [499077, 499248]);
+  assert.equal(n.votes.abstention, 33458767);
+  assert.equal(n.votes.electorate, 158745502);
+  assert.equal(normalizeRace('governador', 'SC', { ...fx('sc-governador'), tf: 's' }).closure, 'final');
 });

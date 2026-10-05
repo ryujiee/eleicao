@@ -1,7 +1,7 @@
 // Zero-dependency backend: polls TSE once, caches, and fans out to browsers via SSE.
 import http from 'node:http';
 import { readFile } from 'node:fs/promises';
-import { readFileSync } from 'node:fs';
+import { readFileSync, readdirSync } from 'node:fs';
 import { createHash } from 'node:crypto';
 import { extname, join, normalize } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -9,6 +9,7 @@ import { RACES, UFS, abKeys, emptyArea, normalizeArea, normalizeRace } from './l
 
 const AREAS = ['BR', ...Object.keys(UFS)];
 const PUBLIC = fileURLToPath(new URL('./public/', import.meta.url));
+const POLLS = fileURLToPath(new URL('./data/polls.json', import.meta.url));
 const TYPES = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.css': 'text/css; charset=utf-8', '.svg': 'image/svg+xml', '.ico': 'image/x-icon', '.png': 'image/png' };
 const UA = 'eleicao.infinitytech.net.br (+https://github.com/ryujiee/eleicao)';
 
@@ -49,9 +50,8 @@ export function createApp({
   let timer, delay = pollMs;
   // Build version = hash of the frontend files. Assets get ?v=<version> so Cloudflare/browser caches (CF forces
   // 4h on css/js) never mix versions; open pages compare it with snapshot.version and reload after a deploy.
-  const files = ['index.html', 'app.js', 'style.css', 'brasil.svg'].map(f => readFileSync(join(PUBLIC, f)));
-  const version = createHash('sha1').update(Buffer.concat(files)).digest('hex').slice(0, 10);
-  const indexHtml = files[0].toString().replaceAll('__V__', version);
+  const version = createHash('sha1').update(Buffer.concat(readdirSync(PUBLIC).sort().map(f => readFileSync(join(PUBLIC, f))))).digest('hex').slice(0, 10);
+  const indexHtml = readFileSync(join(PUBLIC, 'index.html'), 'utf8').replaceAll('__V__', version);
   const clients = new Set();
   const stats = { requests: 0, notModified: 0, urls: [] };
 
@@ -162,6 +162,17 @@ export function createApp({
       req.on('close', () => clients.delete(res));
       return;
     }
+    // Registered opinion polls, curated by hand in data/polls.json (integration disabled until a reliable source exists).
+    if (path === '/api/polls') {
+      try {
+        const body = await readFile(POLLS);
+        res.writeHead(200, { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-cache' });
+        res.end(body);
+      } catch {
+        res.writeHead(200, { 'content-type': 'application/json; charset=utf-8' }).end('{"enabled":false,"runoff":[],"firstRound":[]}');
+      }
+      return;
+    }
     if (path === '/healthz') {
       res.writeHead(lastError ? 503 : 200, { 'content-type': 'application/json' });
       res.end(JSON.stringify({ ok: !lastError, lastError, checkedAt, updatedAt, clients: clients.size, requests: stats.requests, notModified: stats.notModified }));
@@ -190,7 +201,9 @@ export function createApp({
     const file = join(PUBLIC, normalize(path));
     if (!file.startsWith(PUBLIC)) { res.writeHead(404).end(); return; }
     try {
-      const body = await readFile(file);
+      let body = await readFile(file);
+      // ES module imports carry ?v=__V__ too, so every asset of a build is versioned.
+      if (extname(file) === '.js' || extname(file) === '.css') body = body.toString().replaceAll('__V__', version);
       const versioned = new URL(req.url, 'http://x').searchParams.get('v') === version;
       res.writeHead(200, { 'content-type': TYPES[extname(file)] || 'application/octet-stream', 'cache-control': versioned ? 'public, max-age=31536000, immutable' : 'public, max-age=60' });
       res.end(req.method === 'HEAD' ? undefined : body);

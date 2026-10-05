@@ -6,8 +6,10 @@
 <title>Eleições 2026 — Apuração ao vivo: Presidente e Santa Catarina</title>
 <meta name="description" content="Apuração em tempo real das eleições de 2026 com dados oficiais do TSE: Presidente (com mapa de quem lidera em cada estado), Governador, Senado, Deputados Federais e Estaduais de Santa Catarina.">
 <meta name="theme-color" content="#0a0f1c">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 32 32%22%3E%3Crect width=%2232%22 height=%2232%22 rx=%228%22 fill=%22%230a0f1c%22/%3E%3Ctext x=%2216%22 y=%2222%22 font-size=%2216%22 text-anchor=%22middle%22 fill=%22%23f5c542%22 font-family=%22sans-serif%22 font-weight=%22bold%22%3E26%3C/text%3E%3C/svg%3E">
 <meta name="version" content="__V__">
 <link rel="stylesheet" href="style.css?v=__V__">
+<link rel="stylesheet" href="segundo.css?v=__V__">
 <link rel="preload" href="brasil.svg?v=__V__" as="fetch" crossorigin>
 <script type="module" src="app.js?v=__V__"></script>
 </head>
@@ -17,7 +19,7 @@
     <h1>ELEIÇÕES 2026</h1>
     <span id="live" class="live off" role="status">● CONECTANDO</span>
   </div>
-  <div class="apurado"><strong id="nat-pct">–</strong> <span>apurado · <em id="apur-scope">Brasil</em></span></div>
+  <div class="apurado"><strong id="nat-pct">–</strong> <span><span id="apur-label">apurado</span> · <em id="apur-scope">Brasil</em></span></div>
   <div class="bar" aria-hidden="true"><i id="nat-bar"></i></div>
   <p class="meta" id="meta">Aguardando dados do TSE…</p>
 </header>
@@ -25,6 +27,7 @@
 
 <nav class="tabs" id="tabs" role="tablist" aria-label="Cargos">
   <a role="tab" href="#presidente" data-tab="presidente">Presidente</a>
+  <a role="tab" href="#segundo-turno" data-tab="segundo-turno">2º turno</a>
   <a role="tab" href="#governador" data-tab="governador">Governador</a>
   <a role="tab" href="#senado" data-tab="senado">Senado</a>
   <a role="tab" href="#federal" data-tab="federal">Federal</a>
@@ -78,6 +81,8 @@
     <ol id="race-list" class="race-list"></ol>
   </section>
 </main>
+
+<main id="panel-runoff" class="runoff-panel" role="tabpanel" hidden></main>
 
 <footer class="foot">
   Dados oficiais de divulgação do <a href="https://resultados.tse.jus.br" rel="noopener">TSE</a> · Malha territorial do <a href="https://servicodados.ibge.gov.br/api/docs/malhas?versao=3" rel="noopener">IBGE</a> · Projeto open source: <a href="https://github.com/ryujiee/eleicao" rel="noopener">github.com/ryujiee/eleicao</a>
